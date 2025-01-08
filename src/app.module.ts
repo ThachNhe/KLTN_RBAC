@@ -2,10 +2,10 @@ import { LoggerModule } from 'nestjs-pino'
 import { loggerConfig } from '@/app.config'
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
-import { OrmModule } from '@/shared/orm.module'
 import { TerminusModule } from '@nestjs/terminus'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
+import { DatabaseModule } from './database/database.module'
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -13,7 +13,7 @@ import { AppService } from './app.service'
     }),
     LoggerModule.forRoot(loggerConfig),
     TerminusModule,
-    OrmModule,
+    DatabaseModule,
   ],
   controllers: [AppController],
   providers: [AppService],

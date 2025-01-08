@@ -31,11 +31,11 @@ async function bootstrap() {
 
   // Cookies
   // https://docs.nestjs.com/techniques/cookies
-  await app.register(fastifyCookie, {
+  await app.register(fastifyCookie as any, {
     secret: config.get('COOKIE_SECRET'),
   })
 
-  await app.register(fastifyMultipart)
+  await app.register(fastifyMultipart as any)
 
   app.enableCors({
     origin: true,
