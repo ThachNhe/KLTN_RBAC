@@ -68,7 +68,6 @@ export class DatabaseService {
     )
     await Promise.all(closePromises)
   }
-
   // generateConnectionKey method
   private generateConnectionKey(body: DatabaseConnectionDto): string {
     const { ipAddress, username, database } = body
@@ -78,7 +77,7 @@ export class DatabaseService {
   // testConnection method
   private async testConnection(pool: mysql.Pool) {
     try {
-      await pool.query('SELECT 1')
+      await pool.query('SELECT  * from users u')
       return true
     } catch {
       return false

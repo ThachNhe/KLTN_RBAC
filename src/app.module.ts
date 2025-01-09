@@ -6,6 +6,7 @@ import { TerminusModule } from '@nestjs/terminus'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
 import { DatabaseModule } from './database/database.module'
+import { UserRolePermissionModule } from './user-role-permission/user-role-permission.module'
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -14,6 +15,7 @@ import { DatabaseModule } from './database/database.module'
     LoggerModule.forRoot(loggerConfig),
     TerminusModule,
     DatabaseModule,
+    UserRolePermissionModule,
   ],
   controllers: [AppController],
   providers: [AppService],
