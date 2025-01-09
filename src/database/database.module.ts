@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common'
-import { MikroOrmModule } from '@mikro-orm/nestjs'
 import { DatabaseService } from './database.service'
 import { DatabaseController } from './database.controller'
 
@@ -7,5 +6,6 @@ import { DatabaseController } from './database.controller'
   imports: [],
   providers: [DatabaseService],
   controllers: [DatabaseController],
+  exports: [DatabaseService],
 })
 export class DatabaseModule {}

@@ -78,8 +78,12 @@ export class DatabaseService {
       throw new InternalServerErrorException('No connection to MySQL')
     }
 
-    const [rows] = await pool?.query('SELECT 1')
+    const [rows] = await pool?.query('SELECT  * from users u')
     return rows
+  }
+
+  async getConnectionKey() {
+    return this.connectionKey
   }
 
   // generateConnectionKey method
@@ -91,7 +95,7 @@ export class DatabaseService {
   // testConnection method
   private async testConnection(pool: mysql.Pool) {
     try {
-      await pool.query('SELECT 1')
+      await pool.query('SELECT  * from users u')
       return true
     } catch {
       return false
