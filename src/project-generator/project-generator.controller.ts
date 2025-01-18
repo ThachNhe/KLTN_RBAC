@@ -32,9 +32,10 @@ export class ProjectGeneratorController {
         'Content-Disposition',
         `attachment; filename=${createProjectDto.name}.zip`,
       )
-      this.logger.log(`Successfully generated project ${createProjectDto.name}`)
-      // return zipBuffer.toString('base64')
 
+      this.logger.log(`Successfully generated project ${createProjectDto.name}`)
+
+      // Send the zip buffer as the response
       response.send(zipBuffer)
     } catch (error) {
       this.logger.error(

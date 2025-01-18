@@ -75,15 +75,29 @@ export class ProjectGeneratorService {
     options: ProjectOptions,
   ): Promise<void> {
     try {
-      // Read package.json
+      // Customize package.json
       const packageJsonPath = path.join(projectPath, 'package.json')
       const packageJson = await fs.readJson(packageJsonPath)
-
-      // Customize package.json
       packageJson.description = options.description || packageJson.description
-
-      // Write back package.json
       await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 })
+
+      // Set up Swagger if needed
+      if (options.swagger) {
+        await this.setupSwagger(projectPath)
+        this.logger.debug('Swagger setup completed')
+      }
+
+      // Add message to README.md
+      const readmePath = path.join(projectPath, 'README.md')
+      let readmeContent = await fs.readFile(readmePath, 'utf8')
+
+      if (options.swagger) {
+        readmeContent += `\n\n## Swagger Documentation\n`
+        readmeContent += `- Swagger UI is available at http://localhost:3000/api\n`
+        readmeContent += `- Swagger JSON is available at http://localhost:3000/api-json\n`
+      }
+
+      await fs.writeFile(readmePath, readmeContent)
     } catch (error) {
       this.logger.error(`Failed to customize project: ${error.message}`)
       throw error
@@ -93,14 +107,14 @@ export class ProjectGeneratorService {
   private async createZipFromDirectory(dirPath: string): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       try {
-        // Khởi tạo archive trước
+        // Initialize archiver
         const archive = archiver('zip', {
           zlib: { level: 9 },
         })
 
         const chunks: any[] = []
 
-        // Thêm event listeners
+        // Add listeners
         archive.on('data', (chunk) => chunks.push(chunk))
         archive.on('warning', (err) => {
           if (err.code === 'ENOENT') {
@@ -118,14 +132,89 @@ export class ProjectGeneratorService {
           resolve(Buffer.concat(chunks))
         })
 
-        // Thêm files vào archive
+        // Add directory to archive
         archive.directory(dirPath, false)
 
-        // Finalize sau khi đã setup xong
+        // Finalize archive
         archive.finalize()
       } catch (error) {
         reject(error)
       }
     })
+  }
+
+  private async setupSwagger(projectPath: string): Promise<void> {
+    try {
+      // Get package.json
+      const packageJsonPath = path.join(projectPath, 'package.json')
+      const packageJson = await fs.readJson(packageJsonPath)
+
+      // Add swagger dependencies
+      packageJson.dependencies = {
+        ...packageJson.dependencies,
+        '@nestjs/swagger': '^8.1.1',
+        'swagger-ui-express': '^5.0.1',
+      }
+
+      // Write back package.json
+      await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 })
+
+      // Update main.ts
+      const mainFilePath = path.join(projectPath, 'src/main.ts')
+      let mainContent = await fs.readFile(mainFilePath, 'utf8')
+
+      // Add swagger imports
+      const swaggerImports = `import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';\n`
+      mainContent = swaggerImports + mainContent
+
+      // Add swagger setup
+      const swaggerSetup = `
+        // Swagger Configuration
+        const config = new DocumentBuilder()
+          .setTitle('API Documentation')
+          .setDescription('Your API Description')
+          .setVersion('1.0')
+          .addBearerAuth()
+          .build();
+        
+        const document = SwaggerModule.createDocument(app, config);
+        SwaggerModule.setup('api', app, document);
+      `
+
+      // Add swagger setup after app.listen
+      mainContent = mainContent.replace(
+        'await app.listen(',
+        `${swaggerSetup}\n  await app.listen(`,
+      )
+
+      // Write back main.ts
+      await fs.writeFile(mainFilePath, mainContent, 'utf8')
+
+      // Create config directory
+      const configDir = path.join(projectPath, 'src/config')
+      await fs.ensureDir(configDir)
+
+      const swaggerConfigContent = `
+        import { DocumentBuilder } from '@nestjs/swagger';
+
+        export const swaggerConfig = new DocumentBuilder()
+          .setTitle('API Documentation')
+          .setDescription('Your API Description')
+          .setVersion('1.0')
+          .addBearerAuth()
+          .addTag('api')
+          .build();
+        `
+
+      await fs.writeFile(
+        path.join(configDir, 'swagger.config.ts'),
+        swaggerConfigContent,
+      )
+
+      this.logger.debug('Swagger setup completed')
+    } catch (error) {
+      this.logger.error(`Failed to setup swagger: ${error.message}`)
+      throw error
+    }
   }
 }
