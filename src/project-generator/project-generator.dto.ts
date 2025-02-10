@@ -27,4 +27,9 @@ export class CreateProjectDto {
   @ApiProperty()
   @IsBoolean()
   swagger?: boolean
+
+  @IsOptional()
+  @ApiProperty()
+  @IsBoolean()
+  auth?: boolean
 }

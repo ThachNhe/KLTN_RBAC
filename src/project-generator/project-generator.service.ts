@@ -4,10 +4,16 @@ import * as fs from 'fs-extra'
 import * as path from 'path'
 import archiver = require('archiver')
 import { ProjectOptions } from '@/project-generator/project-generator.interface'
+import { SwaggerSetupService } from '@/project-generator/project-options/ swagger-setup.service'
+import { AuthServiceSetup } from '@/project-generator/project-options/auth-setup.service'
+import { AuthorizationSetupService } from '@/project-generator/project-options/authorization-setup.service'
 
 @Injectable()
 export class ProjectGeneratorService {
   private readonly logger = new Logger(ProjectGeneratorService.name)
+  private readonly swaggerSetupService = new SwaggerSetupService()
+  private readonly authServiceSetup = new AuthServiceSetup()
+  private readonly authorizationSetupService = new AuthorizationSetupService()
 
   async generateProjectZip(options: ProjectOptions): Promise<Buffer> {
     const tempDir = path.join(process.cwd(), 'temp')
@@ -83,9 +89,18 @@ export class ProjectGeneratorService {
 
       // Set up Swagger if needed
       if (options.swagger) {
-        await this.setupSwagger(projectPath)
+        await this.swaggerSetupService.setup(projectPath)
         this.logger.debug('Swagger setup completed')
       }
+
+      // Set up Auth if needed
+      if (options.auth) {
+        await this.authServiceSetup.setup(projectPath)
+        this.logger.debug('Auth setup completed')
+      }
+
+      // Set up Authorization if needed
+      await this.authorizationSetupService.setup(projectPath)
 
       // Add message to README.md
       const readmePath = path.join(projectPath, 'README.md')
@@ -141,80 +156,5 @@ export class ProjectGeneratorService {
         reject(error)
       }
     })
-  }
-
-  private async setupSwagger(projectPath: string): Promise<void> {
-    try {
-      // Get package.json
-      const packageJsonPath = path.join(projectPath, 'package.json')
-      const packageJson = await fs.readJson(packageJsonPath)
-
-      // Add swagger dependencies
-      packageJson.dependencies = {
-        ...packageJson.dependencies,
-        '@nestjs/swagger': '^8.1.1',
-        'swagger-ui-express': '^5.0.1',
-      }
-
-      // Write back package.json
-      await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 })
-
-      // Update main.ts
-      const mainFilePath = path.join(projectPath, 'src/main.ts')
-      let mainContent = await fs.readFile(mainFilePath, 'utf8')
-
-      // Add swagger imports
-      const swaggerImports = `import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';\n`
-      mainContent = swaggerImports + mainContent
-
-      // Add swagger setup
-      const swaggerSetup = `
-        // Swagger Configuration
-        const config = new DocumentBuilder()
-          .setTitle('API Documentation')
-          .setDescription('Your API Description')
-          .setVersion('1.0')
-          .addBearerAuth()
-          .build();
-        
-        const document = SwaggerModule.createDocument(app, config);
-        SwaggerModule.setup('api', app, document);
-      `
-
-      // Add swagger setup after app.listen
-      mainContent = mainContent.replace(
-        'await app.listen(',
-        `${swaggerSetup}\n  await app.listen(`,
-      )
-
-      // Write back main.ts
-      await fs.writeFile(mainFilePath, mainContent, 'utf8')
-
-      // Create config directory
-      const configDir = path.join(projectPath, 'src/config')
-      await fs.ensureDir(configDir)
-
-      const swaggerConfigContent = `
-        import { DocumentBuilder } from '@nestjs/swagger';
-
-        export const swaggerConfig = new DocumentBuilder()
-          .setTitle('API Documentation')
-          .setDescription('Your API Description')
-          .setVersion('1.0')
-          .addBearerAuth()
-          .addTag('api')
-          .build();
-        `
-
-      await fs.writeFile(
-        path.join(configDir, 'swagger.config.ts'),
-        swaggerConfigContent,
-      )
-
-      this.logger.debug('Swagger setup completed')
-    } catch (error) {
-      this.logger.error(`Failed to setup swagger: ${error.message}`)
-      throw error
-    }
   }
 }
