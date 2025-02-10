@@ -3,4 +3,5 @@ export interface ProjectOptions {
   packageManager: 'npm' | 'yarn' | 'pnpm'
   description?: string
   swagger?: boolean
+  auth?: boolean
 }
