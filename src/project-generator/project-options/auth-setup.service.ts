@@ -26,11 +26,11 @@ export class AuthServiceSetup {
   }
 
   private async updateDependencies(projectPath: string) {
-    // 1. Thêm dependencies vào package.json
+    // Add dependencies to package.json
     const packageJsonPath = path.join(projectPath, 'package.json')
     const packageJson = await fs.readJson(packageJsonPath)
 
-    // Thêm auth dependencies
+    // Add auth dependencies
     packageJson.dependencies = {
       ...packageJson.dependencies,
       '@nestjs/jwt': '^10.0.0',
@@ -48,7 +48,6 @@ export class AuthServiceSetup {
       '@types/bcrypt': '^5.0.0',
     }
 
-    // Ghi lại package.json
     await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 })
   }
 
@@ -67,8 +66,7 @@ export class AuthServiceSetup {
     await fs.ensureDir(dtoDir)
 
     // auth.module.ts
-    const authModuleContent = `
-import { Module } from '@nestjs/common';
+    const authModuleContent = `import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
@@ -89,10 +87,21 @@ import { UsersModule } from '../users/users.module';
   controllers: [AuthController],
   exports: [AuthService],
 })
-export class AuthModule {}`
+export class AuthModule {}
+`
+
+    const authInterfaceContent = `import { Request } from 'express'
+
+import { User } from '@/db/entities'
+
+export interface AuthRequest extends Request {
+  user: User
+}
+
+`
 
     // auth.service.ts
-    const authServiceContent = `import { Injectable, UnauthorizedException } from '@nestjs/common';
+    const authServiceContent = `import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
@@ -113,26 +122,56 @@ export class AuthService {
     return null;
   }
 
+  async getAuthUser(user: User) {
+    const accessToken = this.getAccessToken(
+      user.id,
+      user.role.name,
+      user.email,
+      '1d',
+    );
+    const refreshToken = this.getAccessToken(
+      user.id,
+      user.role.name,
+      user.email,
+      '30d',
+    );
+
+    return { ...user, accessToken, refreshToken };
+  }
+
+  getAccessToken(
+    userId: string,
+    role: string,
+    email: string,
+    expiresIn: string | number = '30m',
+  ) {
+    return this.jwtService.sign(
+      {
+        sub: userId,
+        role,
+        email,
+      },
+      { expiresIn },
+    );
+  }
+
   async login(user: any) {
     const payload = { email: user.email, sub: user.id };
     return {
       access_token: this.jwtService.sign(payload),
     };
   }
-}`
+}
+`
 
     // auth.controller.ts
-    const authControllerContent = `import {
-  Controller,
-  Post,
-  Body,
-  ValidationPipe,
-  UnauthorizedException,
-} from '@nestjs/common';
+    const authControllerContent = `import { Controller, Post, Request, UseGuards } from '@nestjs/common';
+
 import { AuthService } from './auth.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { LoginDto } from './dto/auth.dto';
 import { LocalAuthGuard } from './guards/jwt-auth.guard';
+import { AuthRequest } from '.dto/auth.interface';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -144,48 +183,61 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Return JWT token' })
   @ApiBody({ type: LoginDto })
   @UseGuards(LocalAuthGuard)
-  async login(@Body(new ValidationPipe()) loginDto: LoginDto) {
-    const user = await this.authService.validateUser(
-      loginDto.email,
-      loginDto.password,
-    );
+  async login(@Request() req: AuthRequest) {
+    this.authService.getAuthUser(req.user);
+  }
+}
+
+`
+    // local.strategy.ts
+    const localStrategyContent = `import { Strategy } from 'passport-local'
+import { Injectable, UnauthorizedException } from '@nestjs/common'
+import { PassportStrategy } from '@nestjs/passport'
+
+import { AuthService } from './auth.service'
+
+@Injectable()
+export class LocalStrategy extends PassportStrategy(Strategy) {
+  constructor(private authService: AuthService) {
+    super()
+  }
+
+  async validate(username: string, password: string){
+    const user = await this.authService.validateUser(username, password)
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException()
     }
-    return this.authService.login(user);
+    return user
   }
 }
 `
 
     // jwt.strategy.ts
-    const jwtStrategyContent = `
-import { ExtractJwt, Strategy } from 'passport-jwt';
-import { PassportStrategy } from '@nestjs/passport';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { UsersService } from '../../users/users.service';
+    const jwtStrategyContent = `import { ExtractJwt, Strategy } from 'passport-jwt'
+import { PassportStrategy } from '@nestjs/passport'
+import { Injectable } from '@nestjs/common'
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private usersService: UsersService) {
+  constructor() {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        ExtractJwt.fromUrlQueryParameter('token'),
+      ]),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'your-secret-key',
-    });
+      secretOrKey: process.env.JWT_SECRET || 'your-secret',
+    })
   }
 
   async validate(payload: any) {
-    const user = await this.usersService.findOne(payload.sub);
-    if (!user) {
-      throw new UnauthorizedException();
-    }
-    return user;
+    return { id: payload.sub, role: payload.role, email: payload.email }
   }
-}`
+}
+`
 
     // jwt-auth.guard.ts
-    const jwtAuthGuardContent = `
-import { Injectable } from '@nestjs/common';
+    const jwtAuthGuardContent = `import { Injectable } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()
@@ -205,14 +257,13 @@ export const CurrentUser = createParamDecorator(
 );`
 
     // login.dto.ts
-    const loginDtoContent = `
-import { ApiProperty } from '@nestjs/swagger';
+    const loginDtoContent = `import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsEmail, IsNotEmpty } from 'class-validator';
 export class LoginDto {
   @ApiProperty()
   @IsEmail()
   @IsNotEmpty()
-  email: string;
+  username: string;
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
@@ -226,10 +277,22 @@ export class LoginDto {
       path.join(authDir, 'auth.service.ts'),
       authServiceContent,
     )
+
+    await fs.writeFile(
+      path.join(authDir, 'dto', 'auth.interface.ts'),
+      authInterfaceContent,
+    )
+
     await fs.writeFile(
       path.join(authDir, 'auth.controller.ts'),
       authControllerContent,
     )
+
+    await fs.writeFile(
+      path.join(strategiesDir, 'local.strategy.ts'),
+      localStrategyContent,
+    )
+
     await fs.writeFile(
       path.join(strategiesDir, 'jwt.strategy.ts'),
       jwtStrategyContent,
@@ -255,8 +318,7 @@ export class LoginDto {
     await fs.ensureDir(usersDir)
 
     // users.module.ts
-    const usersModuleContent = `
-import { Module } from '@nestjs/common';
+    const usersModuleContent = `import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersService } from './users.service';
 import { User } from './user.entity';
@@ -291,8 +353,7 @@ export class User {
 }`
 
     // users.service.ts
-    const usersServiceContent = `
-import { Injectable } from '@nestjs/common';
+    const usersServiceContent = `import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';

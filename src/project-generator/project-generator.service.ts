@@ -1,10 +1,11 @@
+import { PolicySetupService } from './project-options/policy-setup.service'
 import { Injectable, Logger } from '@nestjs/common'
 import { exec } from 'child_process'
 import * as fs from 'fs-extra'
 import * as path from 'path'
 import archiver = require('archiver')
 import { ProjectOptions } from '@/project-generator/project-generator.interface'
-import { SwaggerSetupService } from '@/project-generator/project-options/ swagger-setup.service'
+import { SwaggerSetupService } from '@/project-generator/project-options/swagger-setup.service'
 import { AuthServiceSetup } from '@/project-generator/project-options/auth-setup.service'
 import { AuthorizationSetupService } from '@/project-generator/project-options/authorization-setup.service'
 
@@ -14,6 +15,7 @@ export class ProjectGeneratorService {
   private readonly swaggerSetupService = new SwaggerSetupService()
   private readonly authServiceSetup = new AuthServiceSetup()
   private readonly authorizationSetupService = new AuthorizationSetupService()
+  private readonly policySetupService = new PolicySetupService()
 
   async generateProjectZip(options: ProjectOptions): Promise<Buffer> {
     const tempDir = path.join(process.cwd(), 'temp')
@@ -93,6 +95,7 @@ export class ProjectGeneratorService {
         this.logger.debug('Swagger setup completed')
       }
 
+      console.log('check option ===================', options)
       // Set up Auth if needed
       if (options.auth) {
         await this.authServiceSetup.setup(projectPath)
@@ -101,6 +104,9 @@ export class ProjectGeneratorService {
 
       // Set up Authorization if needed
       await this.authorizationSetupService.setup(projectPath)
+
+      const configXmlPath = './role-permission-config.xml'
+      await this.policySetupService.setup(projectPath, configXmlPath)
 
       // Add message to README.md
       const readmePath = path.join(projectPath, 'README.md')
