@@ -22,7 +22,8 @@ export class SwaggerSetupService {
   }
 
   private async updateDependencies(projectPath: string): Promise<void> {
-    // Get package.json
+    // Add dependencies to package.json
+    console.log('Updating swagger dependencies---')
     const packageJsonPath = path.join(projectPath, 'package.json')
     const packageJson = await fs.readJson(packageJsonPath)
 
@@ -76,16 +77,15 @@ export class SwaggerSetupService {
     const configDir = path.join(projectPath, 'src/config')
     await fs.ensureDir(configDir)
 
-    const swaggerConfigContent = `
-          import { DocumentBuilder } from '@nestjs/swagger';
-  
-          export const swaggerConfig = new DocumentBuilder()
-            .setTitle('API Documentation')
-            .setDescription('Your API Description')
-            .setVersion('1.0')
-            .addBearerAuth()
-            .addTag('api')
-            .build();
+    const swaggerConfigContent = `import { DocumentBuilder } from '@nestjs/swagger';
+
+export const swaggerConfig = new DocumentBuilder()
+  .setTitle('API Documentation')
+  .setDescription('Your API Description')
+  .setVersion('1.0')
+  .addBearerAuth()
+  .addTag('api')
+  .build();
           `
 
     await fs.writeFile(

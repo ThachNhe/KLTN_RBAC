@@ -37,3 +37,5 @@ lerna-debug.log*
 .env
 
 localstack_data
+
+role-permission-config.xml

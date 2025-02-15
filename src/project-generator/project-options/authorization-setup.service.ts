@@ -32,8 +32,7 @@ export class AuthorizationSetupService {
 
   private async createRoleDecorator(decoratorsDir: string) {
     try {
-      const roleDecoratorContent = `
-import { SetMetadata } from '@nestjs/common';
+      const roleDecoratorContent = `import { SetMetadata } from '@nestjs/common';
 
 export const ROLES_KEY = 'roles';
 export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
@@ -49,8 +48,7 @@ export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
 
   private async createRoleGuard(guardsDir: string) {
     try {
-      const roleGuardContent = `
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+      const roleGuardContent = `import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 
