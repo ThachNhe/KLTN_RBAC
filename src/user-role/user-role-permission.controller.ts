@@ -5,11 +5,11 @@ import {
   MemoryStorageFile,
   UploadedFile,
 } from '@blazity/nest-file-fastify'
-import { FileUploadDto } from '@/user-role-permission/user-role-permission.dto'
-import { UserRolePermissionService } from '@/user-role-permission/user-role-permission.service'
+import { FileUploadDto } from '@/user-role/user-role-permission.dto'
+import { UserRolePermissionService } from '@/user-role/user-role-permission.service'
 
-@ApiTags('User Role Permission')
-@Controller('user-role-permission')
+@ApiTags('User Role')
+@Controller('user-role')
 export class UserRolePermissionController {
   constructor(private userRolePermissionService: UserRolePermissionService) {}
 

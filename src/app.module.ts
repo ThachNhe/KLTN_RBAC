@@ -6,8 +6,9 @@ import { TerminusModule } from '@nestjs/terminus'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
 import { DatabaseModule } from './database/database.module'
-import { UserRolePermissionModule } from './user-role-permission/user-role-permission.module'
-import { ProjectGeneratorModule } from './project-generator/project-generator.module';
+import { UserRolePermissionModule } from './user-role/user-role-permission.module'
+import { ProjectGeneratorModule } from './project-generator/project-generator.module'
+import { RolePermissionModule } from '@/role-permission/role-permission.module'
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -18,6 +19,7 @@ import { ProjectGeneratorModule } from './project-generator/project-generator.mo
     DatabaseModule,
     UserRolePermissionModule,
     ProjectGeneratorModule,
+    RolePermissionModule,
   ],
   controllers: [AppController],
   providers: [AppService],
