@@ -39,3 +39,5 @@ lerna-debug.log*
 localstack_data
 
 role-permission-config.xml
+
+uploads
