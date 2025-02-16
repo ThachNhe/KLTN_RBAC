@@ -1,12 +1,11 @@
-import { Body, Controller, Get, Post, UseInterceptors } from '@nestjs/common'
-import { RolePermissionService } from './role-permission.service'
+import { Controller, Post, UseInterceptors, Body } from '@nestjs/common'
 import { ApiConsumes, ApiTags } from '@nestjs/swagger'
-import { permissionCheckDto } from '@/role-permission/role.permssion.dto'
 import {
-  FileInterceptor,
+  FileFieldsInterceptor,
   MemoryStorageFile,
-  UploadedFile,
-} from '@blazity/nest-file-fastify'
+  UploadedFiles,
+} from '@blazity/nest-file-fastify' // Dùng FileInterceptor cho tất cả tệp
+import { RolePermissionService } from './role-permission.service'
 import { FileUploadDto } from '@/user-role/user-role-permission.dto'
 
 @Controller('role-permission')
@@ -16,22 +15,32 @@ export class RolePermissionController {
 
   @Post('check')
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadFile(
-    @UploadedFile() file: MemoryStorageFile,
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'files', maxCount: 1 },
+      { name: 'nestjsDir', maxCount: 1 },
+    ]),
+  )
+  async uploadFiles(
+    @UploadedFiles()
+    files: { files?: MemoryStorageFile; nestjsDir?: MemoryStorageFile },
     @Body() body: FileUploadDto,
   ) {
-    if (!file) {
-      throw new Error('File not found')
+    if (!files.files || !files.nestjsDir) {
+      throw new Error('Both XML and NestJS project files are required')
     }
-    // Read file content from memory storage
-    const xmlData = file.buffer.toString('utf8')
 
-    return this.rolePermissionService.checkProjectPermissions(xmlData)
-  }
+    // Lấy dữ liệu từ buffer của tệp XML
+    const xmlFileData = files.files[0].buffer.toString('utf8')
+    console.log('XML File Data:', xmlFileData)
 
-  @Get()
-  async getRolePermissions() {
-    return 'OKOK'
+    // Lấy dữ liệu từ buffer của tệp ZIP (dự án NestJS)
+    const nestJsZipData = files.nestjsDir[0].buffer
+    // console.log('NestJS ZIP File Data Size:', nestJsZipData.length)
+
+    return this.rolePermissionService.checkProjectPermissions(
+      xmlFileData,
+      nestJsZipData,
+    )
   }
 }
