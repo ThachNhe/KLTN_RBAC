@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as unzipper from 'unzipper'
 import * as xml2js from 'xml2js'
+import * as ts from 'typescript'
 
 @Injectable()
 export class RolePermissionService {
@@ -10,12 +11,11 @@ export class RolePermissionService {
   private permissions: any[] = []
 
   async checkProjectPermissions(xmlFileData: string, nestJsZipBuffer: Buffer) {
-    // Analyze XML file to get modules
     const modules = await this.parseXML(xmlFileData)
 
     let result = 'Permissions check result:\n'
 
-    // extract nestjs project from zip buffer
+    // Extract nestjs project from zip buffer
     const extractPath = path.join(__dirname, '../../uploads', 'nestjs-project')
     await this.extractNestJsProject(nestJsZipBuffer, extractPath)
 
@@ -31,11 +31,10 @@ export class RolePermissionService {
 
     this.buildRules(modules)
 
-    // console.log('======================== Rules: ', this.rules)
-    // console.log('======================== Permissions: ', this.permissions)
+    console.log('======================== Rules: ', this.rules)
+    console.log('======================== Permissions: ', this.permissions)
 
     this.filterRedundantPermissions(this.permissions, this.rules)
-
     this.filterLackRules(this.permissions, this.rules)
 
     return result
@@ -84,9 +83,9 @@ export class RolePermissionService {
       const filePath = path.join(srcDir, file)
       const stat = fs.statSync(filePath)
       if (stat.isDirectory()) {
-        controllerFiles.push(...this.getControllerFiles(filePath)) // Quét thư mục con
+        controllerFiles.push(...this.getControllerFiles(filePath)) // Recursively scan subdirectories
       } else if (file.endsWith('.controller.ts')) {
-        controllerFiles.push(filePath) // Lưu file controller
+        controllerFiles.push(filePath) // Save controller file
       }
     })
 
@@ -97,40 +96,91 @@ export class RolePermissionService {
     fileContent: string,
   ): { role: string; action: string; resource: string; condition: string }[] {
     const permissions = []
-    const actionRegex = /@(Get|Post|Put|Delete)(?:\(['"](.+)['"]\)|\(\))/g
-    const roleRegex = /@Roles\(['"](.+)['"]\)/g
-    const controllerRegex = /@Controller\(['"](.+)['"]\)/g
-    const conditionRegex =
-      /this\.policyService\.checkPermission\([^,]+,\s*[^,]+,\s*['"]([^'"]+)['"]/g
 
-    // Lấy resource từ Controller decorator - chỉ lấy một lần
+    const sourceFile = ts.createSourceFile(
+      'controller.ts',
+      fileContent,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    )
+
+    const controllerDecorator = this.getDecoratorByName(
+      sourceFile,
+      'Controller',
+    )
+
+    const rolesDecorator = this.getDecoratorByName(sourceFile, 'Roles')
+    const actionsDecorators = [
+      ...this.getDecoratorByName(sourceFile, 'Get'),
+      ...this.getDecoratorByName(sourceFile, 'Post'),
+      ...this.getDecoratorByName(sourceFile, 'Put'),
+      ...this.getDecoratorByName(sourceFile, 'Delete'),
+    ]
+
+    const checkPermissionCalls = this.getCheckPermissionCalls(sourceFile)
+
     let resource = ''
-    let controllerMatch = controllerRegex.exec(fileContent)
-    if (controllerMatch) {
-      resource = controllerMatch[1]
+    if (controllerDecorator.length > 0) {
+      const controllerExpression = controllerDecorator[0].expression
+      if (
+        ts.isCallExpression(controllerExpression) &&
+        controllerExpression.arguments.length > 0
+      ) {
+        const arg = controllerExpression.arguments[0]
+        if (ts.isStringLiteral(arg)) {
+          resource = arg.text
+        }
+      }
     }
 
-    // Lấy tất cả actions và roles
-    const actions = []
-    const roles = []
-    const conditions = []
-
-    let actionMatch
-    while ((actionMatch = actionRegex.exec(fileContent)) !== null) {
-      actions.push(actionMatch[1])
+    let roles: string[] = []
+    if (rolesDecorator.length > 0) {
+      roles = rolesDecorator.map((d) => {
+        const roleExpression = d.expression
+        if (
+          ts.isCallExpression(roleExpression) &&
+          roleExpression.arguments.length > 0
+        ) {
+          const arg = roleExpression.arguments[0]
+          if (ts.isStringLiteral(arg)) {
+            return arg.text
+          }
+        }
+        return ''
+      })
     }
 
-    let roleMatch
-    while ((roleMatch = roleRegex.exec(fileContent)) !== null) {
-      roles.push(roleMatch[1])
+    let actions: string[] = []
+    if (actionsDecorators.length > 0) {
+      actions = actionsDecorators.map((d) => {
+        if (
+          ts.isCallExpression(d.expression) &&
+          ts.isIdentifier(d.expression.expression)
+        ) {
+          return d.expression.expression.getText().toLowerCase()
+        }
+        return ''
+      })
     }
 
-    let conditionMatch
-    while ((conditionMatch = conditionRegex.exec(fileContent)) !== null) {
-      conditions.push(conditionMatch[1].trim())
+    let conditions: string[] = []
+    if (checkPermissionCalls.length > 0) {
+      conditions = checkPermissionCalls.map((call) => {
+        if (ts.isCallExpression(call)) {
+          const conditionArg = call.arguments[2]
+          if (ts.isStringLiteral(conditionArg)) {
+            // console.log('Condition arg: ', conditionArg.text)
+            return conditionArg.text
+          }
+        }
+
+        return ''
+      })
     }
 
-    const maxLength = Math.max(actions.length, roles.length, conditions.length)
+    const maxLength = Math.max(actions.length, roles.length)
+
     for (let i = 0; i < maxLength; i++) {
       permissions.push({
         role: roles[i] || '',
@@ -141,6 +191,23 @@ export class RolePermissionService {
     }
 
     return permissions
+  }
+
+  private getDecoratorByName(
+    sourceFile: ts.SourceFile,
+    decoratorName: string,
+  ): ts.Decorator[] {
+    const decorators: ts.Decorator[] = []
+    const visitNode = (node: ts.Node) => {
+      if (ts.isDecorator(node) && ts.isCallExpression(node.expression)) {
+        if (node.expression.expression.getText() === decoratorName) {
+          decorators.push(node)
+        }
+      }
+      ts.forEachChild(node, visitNode)
+    }
+    visitNode(sourceFile)
+    return decorators
   }
 
   private buildRules(modules: any) {
@@ -201,7 +268,6 @@ export class RolePermissionService {
     }
   }
 
-  // To check lack rules
   private checkLackRuleToPermissions(permissions: any[], rule: any) {
     for (const permission of permissions) {
       if (this.equalCompare(rule, permission)) {
@@ -217,5 +283,25 @@ export class RolePermissionService {
         console.log('Lack ======: ', rule)
       }
     }
+  }
+
+  private getCheckPermissionCalls(sourceFile: ts.SourceFile) {
+    const calls: ts.CallExpression[] = []
+
+    const visitNode = (node: ts.Node) => {
+      if (ts.isCallExpression(node)) {
+        const expression = node.expression
+        if (
+          ts.isPropertyAccessExpression(expression) &&
+          expression.name.text === 'checkPermission'
+        ) {
+          calls.push(node)
+        }
+      }
+      ts.forEachChild(node, visitNode)
+    }
+
+    visitNode(sourceFile)
+    return calls
   }
 }
