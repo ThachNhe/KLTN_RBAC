@@ -1,3 +1,4 @@
+import { SrcFileSetupService } from './project-options/src-file-setup.service'
 import { PolicySetupService } from './project-options/policy-setup.service'
 import { Injectable, Logger } from '@nestjs/common'
 import { exec } from 'child_process'
@@ -8,6 +9,8 @@ import { ProjectOptions } from '@/project-generator/project-generator.interface'
 import { SwaggerSetupService } from '@/project-generator/project-options/swagger-setup.service'
 import { AuthServiceSetup } from '@/project-generator/project-options/auth-setup.service'
 import { AuthorizationSetupService } from '@/project-generator/project-options/authorization-setup.service'
+import { SharedSetupService } from '@/project-generator/project-options/shared-setup.service'
+import { ConnectDbSetupService } from '@/project-generator/project-options/connect-db-setup.service'
 
 @Injectable()
 export class ProjectGeneratorService {
@@ -16,6 +19,9 @@ export class ProjectGeneratorService {
   private readonly authServiceSetup = new AuthServiceSetup()
   private readonly authorizationSetupService = new AuthorizationSetupService()
   private readonly policySetupService = new PolicySetupService()
+  private readonly sharedSetupService = new SharedSetupService()
+  private readonly srcFileSetupService = new SrcFileSetupService()
+  private readonly connectDbSetupService = new ConnectDbSetupService()
 
   async generateProjectZip(options: ProjectOptions): Promise<Buffer> {
     const tempDir = path.join(process.cwd(), 'temp')
@@ -89,16 +95,21 @@ export class ProjectGeneratorService {
       packageJson.description = options.description || packageJson.description
       await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 })
 
+      await this.sharedSetupService.setup(projectPath)
+
+      await this.srcFileSetupService.setup(projectPath)
+
       // Set up Swagger if needed
       if (options.swagger) {
         await this.swaggerSetupService.setup(projectPath)
         this.logger.debug('Swagger setup completed')
       }
 
-      console.log('check option ===================', options)
+      // console.log('check option ===================', options)
       // Set up Auth if needed
       if (options.auth) {
         await this.authServiceSetup.setup(projectPath)
+        await this.connectDbSetupService.setup(projectPath)
         this.logger.debug('Auth setup completed')
       }
 
