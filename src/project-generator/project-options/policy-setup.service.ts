@@ -105,18 +105,14 @@ export class ${className} {}
       const role = rule.Role?.[0] ?? 'ANY_ROLE'
       const methodName = rule.Name?.[0] ?? 'defaultMethodName'
 
-      console.log('rule condition ===================', rule.Condition)
-
       // Create method content
-      methodsContent += `
-  @${this.mapHttpAction(action)}('${resource.toLowerCase()}')
+      methodsContent += `@${this.mapHttpAction(action)}('${resource.toLowerCase()}')
   @Roles('${role}')
   @UseGuards(RolesGuard)
   ${methodName}() {
     ${rule.Condition ? this.addCondition(rule.Condition?.[0]?.Restriction?.[0], projectPath) : ''}
     return \`${action} /${resource} => only for ${role}\`;
-  }
-`
+  }`
     }
 
     return `import { Controller, Get, UseGuards } from '@nestjs/common';

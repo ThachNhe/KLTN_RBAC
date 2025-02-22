@@ -6,9 +6,9 @@ import * as path from 'path'
 export class SwaggerSetupService {
   private readonly logger = new Logger(SwaggerSetupService.name)
 
-  async setup(projectPath: string): Promise<void> {
+  async setup(projectPath: string) {
     try {
-      this.updateDependencies(projectPath)
+      await this.updateDependencies(projectPath)
 
       this.updateMainFile(projectPath)
 
@@ -21,16 +21,15 @@ export class SwaggerSetupService {
     }
   }
 
-  private async updateDependencies(projectPath: string): Promise<void> {
+  private async updateDependencies(projectPath: string) {
     // Add dependencies to package.json
-    console.log('Updating swagger dependencies---')
     const packageJsonPath = path.join(projectPath, 'package.json')
     const packageJson = await fs.readJson(packageJsonPath)
 
     // Add swagger dependencies
     packageJson.dependencies = {
       ...packageJson.dependencies,
-      '@nestjs/swagger': '^8.1.1',
+      '@nestjs/swagger': '^7.4.2',
       'swagger-ui-express': '^5.0.1',
     }
 
@@ -38,55 +37,45 @@ export class SwaggerSetupService {
     await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 })
   }
 
-  private async updateMainFile(projectPath: string): Promise<void> {
-    // main.ts update logic
-    // Update main.ts
+  private async updateMainFile(projectPath: string) {
     const mainFilePath = path.join(projectPath, 'src/main.ts')
     let mainContent = await fs.readFile(mainFilePath, 'utf8')
 
-    // Add swagger imports
-    const swaggerImports = `import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';\n`
-    mainContent = swaggerImports + mainContent
+    const swaggerConfig = `import { swagger } from './config/swagger.config';`
 
-    // Add swagger setup
-    const swaggerSetup = `
-  // Swagger Configuration
-  const config = new DocumentBuilder()
-    .setTitle('API Documentation')
-    .setDescription('Your API Description')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
-  `
+    mainContent = `${swaggerConfig}\n${mainContent}`
 
-    // Add swagger setup after app.listen
     mainContent = mainContent.replace(
-      'await app.listen(',
-      `${swaggerSetup}\n  await app.listen(`,
+      'const app = await NestFactory.create(AppModule);',
+      `const app = await NestFactory.create(AppModule);\n  swagger(app);`,
     )
 
-    // Write back main.ts
     await fs.writeFile(mainFilePath, mainContent, 'utf8')
   }
 
   // Create config directory
-  private async createSwaggerConfig(projectPath: string): Promise<void> {
+  private async createSwaggerConfig(projectPath: string) {
     const configDir = path.join(projectPath, 'src/config')
     await fs.ensureDir(configDir)
 
-    const swaggerConfigContent = `import { DocumentBuilder } from '@nestjs/swagger';
-
-export const swaggerConfig = new DocumentBuilder()
-  .setTitle('API Documentation')
-  .setDescription('Your API Description')
-  .setVersion('1.0')
-  .addBearerAuth()
-  .addTag('api')
-  .build();
-          `
+    const swaggerConfigContent = `import { INestApplication } from '@nestjs/common'
+    import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
+    
+    // Swagger API Document
+    export const swagger = (app: INestApplication) => {
+      const config = new DocumentBuilder()
+        .setTitle('Kaput API')
+        .setVersion('0.1.0')
+        .addBearerAuth()
+        .build()
+    
+      const document = SwaggerModule.createDocument(app, config, {
+        extraModels: [],
+      })
+    
+      SwaggerModule.setup('/swagger', app, document)
+    }
+`
 
     await fs.writeFile(
       path.join(configDir, 'swagger.config.ts'),

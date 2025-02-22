@@ -8,15 +8,13 @@ export class AuthServiceSetup {
 
   async setup(projectPath: string): Promise<void> {
     try {
-      this.updateDependencies(projectPath)
+      await this.updateDependencies(projectPath)
 
-      this.createAuthModule(projectPath)
+      await this.createAuthModule(projectPath)
 
-      this.createUsersModule(projectPath)
+      await this.updateAppModule(projectPath)
 
-      this.updateAppModule(projectPath)
-
-      this.createEnvironmentFiles(projectPath)
+      await this.updateEnvironmentFiles(projectPath)
 
       this.logger.debug('Auth setup completed')
     } catch (error) {
@@ -34,8 +32,9 @@ export class AuthServiceSetup {
     packageJson.dependencies = {
       ...packageJson.dependencies,
       '@nestjs/jwt': '^10.0.0',
-      '@nestjs/passport': '^10.0.0',
+      '@nestjs/passport': '^10.0.3',
       passport: '^0.6.0',
+      'passport-local': '^1.0.0',
       'passport-jwt': '^4.0.1',
       bcrypt: '^5.1.0',
       'class-validator': '^0.14.0',
@@ -103,52 +102,47 @@ export interface AuthRequest extends Request {
     // auth.service.ts
     const authServiceContent = `import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
+import { User } from '@/db/entities';
+import { wrap } from '@mikro-orm/core';
+import { InjectRepository } from '@mikro-orm/nestjs';
+import { EntityRepository } from '@mikro-orm/postgresql';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
+    @InjectRepository(User) private userRepo: EntityRepository<User>,
     private jwtService: JwtService,
   ) {}
 
-  async validateUser(email: string, password: string): Promise<any> {
-    const user = await this.usersService.findByEmail(email);
-    if (user && (await bcrypt.compare(password, user.password))) {
-      const { password, ...result } = user;
-      return result;
+  public async validateUser(username: string, password: string): Promise<any> {
+    const user = await this.userRepo.findOne({
+      email: username,
+    });
+
+    if (user && bcrypt.compareSync(password, user.password)) {
+      return wrap(user).toObject();
     }
+
     return null;
   }
 
   async getAuthUser(user: User) {
-    const accessToken = this.getAccessToken(
-      user.id,
-      user.role.name,
-      user.email,
-      '1d',
-    );
-    const refreshToken = this.getAccessToken(
-      user.id,
-      user.role.name,
-      user.email,
-      '30d',
-    );
+    const accessToken = this.getAccessToken(user.id, user.email, '1d');
+
+    const refreshToken = this.getAccessToken(user.id, user.email, '30d');
 
     return { ...user, accessToken, refreshToken };
   }
 
   getAccessToken(
     userId: string,
-    role: string,
     email: string,
     expiresIn: string | number = '30m',
   ) {
     return this.jwtService.sign(
       {
         sub: userId,
-        role,
         email,
       },
       { expiresIn },
@@ -162,6 +156,8 @@ export class AuthService {
     };
   }
 }
+
+
 `
 
     // auth.controller.ts
@@ -171,7 +167,7 @@ import { AuthService } from './auth.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { LoginDto } from './dto/auth.dto';
 import { LocalAuthGuard } from './guards/jwt-auth.guard';
-import { AuthRequest } from '.dto/auth.interface';
+import { AuthRequest } from './dto/auth.interface';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -194,7 +190,7 @@ export class AuthController {
 import { Injectable, UnauthorizedException } from '@nestjs/common'
 import { PassportStrategy } from '@nestjs/passport'
 
-import { AuthService } from './auth.service'
+import { AuthService } from '../auth.service';
 
 @Injectable()
 export class LocalStrategy extends PassportStrategy(Strategy) {
@@ -312,79 +308,6 @@ export class LoginDto {
     )
   }
 
-  private async createUsersModule(projectPath) {
-    // Create users module
-    const usersDir = path.join(projectPath, 'src/users')
-    await fs.ensureDir(usersDir)
-
-    // users.module.ts
-    const usersModuleContent = `import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { UsersService } from './users.service';
-import { User } from './user.entity';
-
-@Module({
-  imports: [TypeOrmModule.forFeature([User])],
-  providers: [UsersService],
-  exports: [UsersService],
-})
-export class UsersModule {}`
-
-    // user.entity.ts
-    const userEntityContent = `
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
-
-@Entity()
-export class User {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column({ unique: true })
-  email: string;
-
-  @Column()
-  password: string;
-
-  @Column({ nullable: true })
-  firstName: string;
-
-  @Column({ nullable: true })
-  lastName: string;
-}`
-
-    // users.service.ts
-    const usersServiceContent = `import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from './user.entity';
-
-@Injectable()
-export class UsersService {
-  constructor(
-    @InjectRepository(User)
-    private usersRepository: Repository<User>,
-  ) {}
-
-  async findOne(id: number): Promise<User> {
-    return this.usersRepository.findOneBy({ id });
-  }
-
-  async findByEmail(email: string): Promise<User> {
-    return this.usersRepository.findOneBy({ email });
-  }
-}`
-
-    await fs.writeFile(
-      path.join(usersDir, 'users.module.ts'),
-      usersModuleContent,
-    )
-    await fs.writeFile(path.join(usersDir, 'user.entity.ts'), userEntityContent)
-    await fs.writeFile(
-      path.join(usersDir, 'users.service.ts'),
-      usersServiceContent,
-    )
-  }
-
   private async updateAppModule(projectPath: string) {
     // Update app.module.ts
     const appModulePath = path.join(projectPath, 'src/app.module.ts')
@@ -402,8 +325,9 @@ export class UsersService {
 
     await fs.writeFile(appModulePath, appModuleContent)
   }
-  private async createEnvironmentFiles(projectPath) {
-    // Create .env and .env.example files
+
+  private async updateEnvironmentFiles(projectPath: string) {
+    // Update .env and .env.example files
     const envContent = `
 JWT_SECRET=your-secret-key
 JWT_EXPIRATION=1h`
