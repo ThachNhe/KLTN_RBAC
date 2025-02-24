@@ -1,10 +1,10 @@
 import { DatabaseConnectionDto } from '@/database/database.dto'
 import { Injectable, InternalServerErrorException } from '@nestjs/common'
-import * as mysql from 'mysql2/promise'
+import { Pool } from 'pg'
 
 @Injectable()
 export class DatabaseService {
-  private pools: Map<string, mysql.Pool> = new Map()
+  private pools: Map<string, Pool> = new Map()
   private connectionKey: string
 
   // connectToDatabase method
@@ -21,29 +21,33 @@ export class DatabaseService {
         }
         await this.closeConnection(this.connectionKey)
       }
+
       // Create a new connection pool
-      const pool = mysql.createPool({
+      const pool = new Pool({
         host: ipAddress,
         user: username,
         password: password,
         database: database,
-        waitForConnections: true,
-        connectionLimit: 10,
-        queueLimit: 0,
-        enableKeepAlive: true,
-        keepAliveInitialDelay: 0,
+        port: 5436,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
       })
 
       // Test the connection
       if (await this.testConnection(pool)) {
         this.pools.set(this.connectionKey, pool)
-        return 'Connected to MySQL successfully'
+        return 'Connected to PostgreSQL successfully'
+      } else {
+        throw new InternalServerErrorException(
+          'Could not connect to PostgreSQL',
+        )
       }
 
       await pool.end()
     } catch (error) {
       console.log('connectToDatabase -> error', error)
-      return 'Could not connect to MySQL'
+      return 'Could not connect to PostgreSQL'
     }
   }
 
@@ -74,12 +78,12 @@ export class DatabaseService {
     const pool = this.getPool(this.connectionKey)
 
     if (!pool) {
-      console.log('No connection to MySQL')
-      throw new InternalServerErrorException('No connection to MySQL')
+      console.log('No connection to PostgreSQL')
+      throw new InternalServerErrorException('No connection to PostgreSQL')
     }
 
-    const [rows] = await pool?.query('SELECT  * from users u')
-    return rows
+    const result = await pool.query('SELECT * FROM users u')
+    return result.rows
   }
 
   async getConnectionKey() {
@@ -93,9 +97,9 @@ export class DatabaseService {
   }
 
   // testConnection method
-  private async testConnection(pool: mysql.Pool) {
+  private async testConnection(pool: Pool) {
     try {
-      await pool.query('SELECT  * from users u')
+      await pool.query('SELECT * FROM users u')
       return true
     } catch {
       return false

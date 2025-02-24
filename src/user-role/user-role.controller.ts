@@ -1,12 +1,12 @@
-import { Body, Controller, Post, UseInterceptors } from '@nestjs/common'
-import { ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger'
+import { FileUploadDto } from '@/user-role/user-role.dto'
+import { UserRoleService } from '@/user-role/user-role.service'
 import {
   FileInterceptor,
   MemoryStorageFile,
   UploadedFile,
 } from '@blazity/nest-file-fastify'
-import { FileUploadDto } from '@/user-role/user-role.dto'
-import { UserRoleService } from '@/user-role/user-role.service'
+import { Body, Controller, Post, UseInterceptors } from '@nestjs/common'
+import { ApiConsumes, ApiTags } from '@nestjs/swagger'
 
 @ApiTags('User Role')
 @Controller('user-role')
@@ -20,6 +20,6 @@ export class UserRoleController {
     @UploadedFile() file: MemoryStorageFile,
     @Body() body: FileUploadDto,
   ) {
-    return this.userRolePermissionService.check(file)
+    return this.userRolePermissionService.checkUserRoleViolation(file)
   }
 }

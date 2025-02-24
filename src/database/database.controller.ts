@@ -10,16 +10,16 @@ export class DatabaseController {
 
   @Post('connect')
   async connect(@Body() body: DatabaseConnectionDto) {
-    return await this.databaseService.connectToDatabase(body)
+    return this.databaseService.connectToDatabase(body)
   }
 
   @Put('disconnect')
   async disconnect() {
-    return await this.databaseService.closeAllConnections()
+    return this.databaseService.closeAllConnections()
   }
 
   @Get('data')
   async getData() {
-    return await this.databaseService.getData()
+    return this.databaseService.getData()
   }
 }
