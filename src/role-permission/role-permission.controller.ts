@@ -6,7 +6,7 @@ import {
   UploadedFiles,
 } from '@blazity/nest-file-fastify' // Dùng FileInterceptor cho tất cả tệp
 import { RolePermissionService } from './role-permission.service'
-import { FileUploadDto } from '@/user-role/user-role-permission.dto'
+import { FileUploadDto } from '@/user-role/user-role.dto'
 
 @Controller('role-permission')
 @ApiTags('Role Permission')
@@ -30,13 +30,10 @@ export class RolePermissionController {
       throw new Error('Both XML and NestJS project files are required')
     }
 
-    // Lấy dữ liệu từ buffer của tệp XML
     const xmlFileData = files.files[0].buffer.toString('utf8')
     console.log('XML File Data:', xmlFileData)
 
-    // Lấy dữ liệu từ buffer của tệp ZIP (dự án NestJS)
     const nestJsZipData = files.nestjsDir[0].buffer
-    // console.log('NestJS ZIP File Data Size:', nestJsZipData.length)
 
     return this.rolePermissionService.checkProjectPermissions(
       xmlFileData,

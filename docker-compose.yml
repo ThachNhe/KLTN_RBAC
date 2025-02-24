@@ -5,8 +5,8 @@ services:
     ports:
       - "${DB_PORT}:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASS}  # Sửa thành DB_PASS
-      MYSQL_USER: ${DB_USER}          # Thêm dòng này
+      MYSQL_ROOT_PASSWORD: ${DB_PASS} 
+      MYSQL_USER: ${DB_USER}          
       MYSQL_DATABASE: ${DB_MAIN}
       MYSQL_PASSWORD: ${DB_PASS}
     volumes:

@@ -6,7 +6,7 @@ import { TerminusModule } from '@nestjs/terminus'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
 import { DatabaseModule } from './database/database.module'
-import { UserRolePermissionModule } from './user-role/user-role-permission.module'
+import { UserRoleModule } from './user-role/user-role.module'
 import { ProjectGeneratorModule } from './project-generator/project-generator.module'
 import { RolePermissionModule } from '@/role-permission/role-permission.module'
 @Module({
@@ -17,7 +17,7 @@ import { RolePermissionModule } from '@/role-permission/role-permission.module'
     LoggerModule.forRoot(loggerConfig),
     TerminusModule,
     DatabaseModule,
-    UserRolePermissionModule,
+    UserRoleModule,
     ProjectGeneratorModule,
     RolePermissionModule,
   ],
