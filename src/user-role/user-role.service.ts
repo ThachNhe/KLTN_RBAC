@@ -1,94 +1,162 @@
 import { DatabaseService } from '@/database/database.service'
+import { RolePermission } from '@/user-role/user-role.interface'
 import { MemoryStorageFile } from '@blazity/nest-file-fastify'
-import { Injectable, InternalServerErrorException } from '@nestjs/common'
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common'
 import * as papa from 'papaparse'
 
 @Injectable()
 export class UserRoleService {
-  constructor(private databaseService: DatabaseService) {}
+  private readonly logger = new Logger(UserRoleService.name)
 
-  async check(file: MemoryStorageFile) {
-    console.log('Starting CSV processing...')
-    console.log('check file : ', file)
+  constructor(private readonly databaseService: DatabaseService) {}
+
+  async checkUserRoleViolation(file: MemoryStorageFile) {
+    try {
+      const [rolePermissionsDb, rolePermissionsCsv] = await Promise.all([
+        this.retrieveDBData(),
+        this.retrieveDataFromCSVFile(file),
+      ])
+
+      if (!rolePermissionsDb?.length || !rolePermissionsCsv?.length) {
+        this.logger.warn('Empty data from DB or CSV')
+        throw new InternalServerErrorException('Empty data from DB or CSV')
+      }
+
+      const dbCopy = [...rolePermissionsDb]
+      const csvCopy = [...rolePermissionsCsv]
+
+      this.compareTwoRolePermission(dbCopy, csvCopy)
+
+      const result = {
+        lackingPermissions: csvCopy,
+        redundantPermissions: dbCopy,
+      }
+
+      return result
+    } catch (error) {
+      this.logger.error(
+        `Error in checking user role violation: ${error.message}`,
+        error.stack,
+      )
+      throw new InternalServerErrorException(
+        `Failed to check role violations: ${error.message}`,
+      )
+    }
+  }
+
+  async retrieveDataFromCSVFile(
+    file: MemoryStorageFile,
+  ): Promise<RolePermission[]> {
     const csvString = file.buffer.toString()
 
     return new Promise((resolve, reject) => {
       papa.parse(csvString, {
         header: true,
         skipEmptyLines: true,
+        dynamicTyping: true,
         complete: async (results) => {
           try {
-            console.log('Parsed CSV data:', results.data[0])
-            console.log('Total rows:', results.data.length)
-
-            // Validate data structure
-            if (results.data.length === 0) {
-              throw new Error('CSV file is empty')
+            if (!results.data.length) {
+              this.logger.warn('CSV file is empty')
+              return resolve([])
             }
 
-            // Validate required columns
-            const requiredColumns = ['User', 'role', 'username', 'password']
-            const missingColumns = requiredColumns.filter(
-              (col) => !results.meta.fields.includes(col),
-            )
+            this.logger.debug(`CSV parsed: ${results.data.length} rows found`)
 
-            console.log(
-              'check csv data: ===================== ',
-              missingColumns,
-            )
+            const normalizedData = results.data.map((item) => ({
+              email: item.email || item.user || '',
+              role: item.description || item.role || '',
+            }))
 
-            await this.retrieveDBData()
-
-            // await this.insertData(results.data)
-            resolve({ message: 'Data processed successfully' })
+            resolve(normalizedData)
           } catch (error) {
-            console.error('Error in processCSV:', error)
+            this.logger.error(
+              `Error parsing CSV: ${error.message}`,
+              error.stack,
+            )
             reject(error)
           }
         },
         error: (error) => {
-          console.error('CSV parsing error:', error)
+          this.logger.error(`CSV parsing error: ${error.message}`, error.stack)
           reject(error)
         },
       })
     })
   }
 
-  private async retrieveDBData() {
-    const connectionKey = await this.databaseService.getConnectionKey()
-
-    const pool = this.databaseService.getPool(connectionKey)
-    if (!pool) {
-      throw new InternalServerErrorException('No database connection')
-    }
-
-    const connection = await pool.getConnection()
-    console.log('Database connection established =====')
+  private async retrieveDBData(): Promise<RolePermission[]> {
+    let connection = null
 
     try {
-      const [rows] = await connection.query('SELECT * FROM users')
-      console.log('Retrieved data:', rows)
+      const connectionKey = await this.databaseService.getConnectionKey()
+      const pool = this.databaseService.getPool(connectionKey)
+
+      if (!pool) {
+        this.logger.error('No database connection available')
+        return []
+      }
+
+      connection = await pool.connect()
+
+      const query = `
+SELECT u.email as email , u.first_name, u.last_name , r."name" as role , u.created_at, u.updated_at
+FROM users u
+LEFT JOIN users_roles ur ON ur.user_id = u.id
+LEFT JOIN roles r ON r.id = ur.role_id;
+      `
+
+      const result = await connection.query(query)
+      return result.rows
     } catch (error) {
-      console.error('Database error:', error)
-      throw new Error(`Failed to retrieve data: ${error.message}`)
+      this.logger.error(`Database error: ${error.message}`, error.stack)
+      return []
     } finally {
-      connection.release()
-      console.log('Database connection released')
+      if (connection) {
+        connection.release()
+      }
+    }
+  }
+
+  private compareTwoRolePermission(
+    rolePermissionsDb: RolePermission[],
+    rolePermissionsCsv: RolePermission[],
+  ): void {
+    const dbMap = new Map<string, RolePermission>()
+
+    rolePermissionsDb.forEach((item) => {
+      const key = this.createComparisonKey(item)
+      dbMap.set(key, item)
+    })
+
+    const duplicateCsvIndices: number[] = []
+    const duplicateDbKeys: string[] = []
+
+    rolePermissionsCsv.forEach((csvItem, index) => {
+      const key = this.createComparisonKey(csvItem)
+      if (dbMap.has(key)) {
+        duplicateCsvIndices.push(index)
+        duplicateDbKeys.push(key)
+      }
+    })
+
+    for (let i = duplicateCsvIndices.length - 1; i >= 0; i--) {
+      rolePermissionsCsv.splice(duplicateCsvIndices[i], 1)
     }
 
-    try {
-      await connection.beginTransaction()
-      console.log('Transaction started')
-
-      await connection.commit()
-      console.log('Transaction committed successfully')
-    } catch (error) {
-      console.error('Database error:', error)
-      await connection.rollback()
-      throw new Error(`Failed to process data: ${error.message}`)
-    } finally {
-      connection.release()
-      console.log('Database connection released')
+    for (let i = rolePermissionsDb.length - 1; i >= 0; i--) {
+      const key = this.createComparisonKey(rolePermissionsDb[i])
+      if (duplicateDbKeys.includes(key)) {
+        rolePermissionsDb.splice(i, 1)
+      }
     }
+  }
+
+  private createComparisonKey(item: RolePermission): string {
+    return `${item.email?.toLowerCase() || ''}_${item.role?.toLowerCase() || ''}`
   }
 }

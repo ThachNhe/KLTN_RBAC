@@ -3,12 +3,12 @@ import { ApiProperty } from '@nestjs/swagger'
 
 export class FileUploadDto {
   @ApiProperty({
-    type: 'array',
+    type: 'file',
     items: {
       type: 'string',
       format: 'binary',
     },
-    description: 'List of files (including XML and other NestJS project files)',
+    description: 'CSV file to upload',
   })
   file: MemoryStorageFile
 }
