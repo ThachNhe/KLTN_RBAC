@@ -6,7 +6,6 @@ import {
   UploadedFiles,
 } from '@blazity/nest-file-fastify' // Dùng FileInterceptor cho tất cả tệp
 import { RolePermissionService } from './role-permission.service'
-
 import { RolePermissionFileUploadDto } from '@/role-permission/role.permssion.dto'
 
 @Controller('role-permission')
@@ -32,7 +31,7 @@ export class RolePermissionController {
     }
 
     const xmlFileData = files.files[0].buffer.toString('utf8')
-    console.log('XML File Data:', xmlFileData)
+    // console.log('XML File Data:', xmlFileData)
 
     const nestJsZipData = files.nestjsDir[0].buffer
 
