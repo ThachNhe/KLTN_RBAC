@@ -109,7 +109,6 @@ FROM users u
 LEFT JOIN users_roles ur ON ur.user_id = u.id
 LEFT JOIN roles r ON r.id = ur.role_id;
       `
-
       const result = await connection.query(query)
       return result.rows
     } catch (error) {
