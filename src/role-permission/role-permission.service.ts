@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import * as fs from 'fs'
 import * as path from 'path'
-import * as unzipper from 'unzipper'
 import * as xml2js from 'xml2js'
 import * as ts from 'typescript'
 
@@ -11,24 +10,32 @@ export class RolePermissionService {
   private permissions: any[] = []
 
   async checkProjectPermissions(xmlFileData: string, nestJsZipBuffer: Buffer) {
-    const modules = await this.parseXML(xmlFileData)
+    const AdmZip = require('adm-zip')
+    const zip = new AdmZip(nestJsZipBuffer)
+    const entries = zip.getEntries()
 
-    let result = 'Permissions check result:\n'
-
-    // Extract nestjs project from zip buffer
     const extractPath = path.join(__dirname, '../../uploads', 'nestjs-project')
     await this.extractNestJsProject(nestJsZipBuffer, extractPath)
 
-    const controllerFiles = this.getControllerFiles(extractPath)
-    console.log('Found controller files:', controllerFiles)
+    const modules = await this.parseXML(xmlFileData)
+    let result = 'Permissions check result:\n'
 
-    for (let i = 0; i < controllerFiles.length; i++) {
-      const fileContent = fs.readFileSync(controllerFiles[i], 'utf8')
+    // Filter controller files
+    const controllerEntries = entries.filter(
+      (entry) =>
+        entry.entryName.endsWith('.controller.ts') && !entry.isDirectory,
+    )
+
+    console.log(
+      'Found controller files:',
+      controllerEntries.map((e) => e.entryName),
+    )
+
+    for (const entry of controllerEntries) {
+      const fileContent = entry.getData().toString('utf8')
       const controllerPermissions = this.getControllerPermissions(fileContent)
-
       this.buildPermissions(controllerPermissions)
     }
-
     this.buildRules(modules)
 
     console.log(
@@ -61,25 +68,50 @@ export class RolePermissionService {
   }
 
   private async extractNestJsProject(zipBuffer: Buffer, extractPath: string) {
-    if (!fs.existsSync(extractPath)) {
-      fs.mkdirSync(extractPath, { recursive: true })
+    if (fs.existsSync(extractPath)) {
+      fs.rmSync(extractPath, { recursive: true, force: true })
     }
 
-    return new Promise((resolve, reject) => {
-      const unzipStream = unzipper.Extract({ path: extractPath })
-      const bufferStream = new (require('stream').PassThrough)()
+    // Create extract directory
+    fs.mkdirSync(extractPath, { recursive: true })
 
-      bufferStream.end(zipBuffer)
-      bufferStream
-        .pipe(unzipStream)
-        .on('close', () => {
-          console.log('Extraction completed')
-          resolve('Extraction completed')
-        })
-        .on('error', (err) => {
-          console.error('Extraction error:', err)
-          reject(err)
-        })
+    return new Promise((resolve, reject) => {
+      try {
+        const AdmZip = require('adm-zip')
+        const zip = new AdmZip(zipBuffer)
+        const entries = zip.getEntries()
+
+        // Filter src entries
+        const srcEntries = entries.filter(
+          (entry) =>
+            entry.entryName.startsWith('src/') || entry.entryName === 'src',
+        )
+
+        // Only extract src entries
+        for (const entry of srcEntries) {
+          if (entry.isDirectory) {
+            const targetDir = path.join(extractPath, entry.entryName)
+            if (!fs.existsSync(targetDir)) {
+              fs.mkdirSync(targetDir, { recursive: true })
+            }
+          } else {
+            const fileData = entry.getData()
+            const targetPath = path.join(extractPath, entry.entryName)
+
+            const parentDir = path.dirname(targetPath)
+            if (!fs.existsSync(parentDir)) {
+              fs.mkdirSync(parentDir, { recursive: true })
+            }
+
+            fs.writeFileSync(targetPath, fileData)
+          }
+        }
+
+        resolve('Extraction completed - src only')
+      } catch (error) {
+        console.error('Failed to extract:', error)
+        reject(error)
+      }
     })
   }
 
