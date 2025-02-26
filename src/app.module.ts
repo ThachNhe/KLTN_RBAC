@@ -9,6 +9,8 @@ import { DatabaseModule } from './database/database.module'
 import { UserRoleModule } from './user-role/user-role.module'
 import { ProjectGeneratorModule } from './project-generator/project-generator.module'
 import { RolePermissionModule } from '@/role-permission/role-permission.module'
+import { LlmModule } from './llm/llm.module'
+import { HttpModule } from '@nestjs/axios'
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -20,6 +22,8 @@ import { RolePermissionModule } from '@/role-permission/role-permission.module'
     UserRoleModule,
     ProjectGeneratorModule,
     RolePermissionModule,
+    LlmModule,
+    HttpModule,
   ],
   controllers: [AppController],
   providers: [AppService],
