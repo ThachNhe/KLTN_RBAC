@@ -6,7 +6,8 @@ import {
   UploadedFiles,
 } from '@blazity/nest-file-fastify' // Dùng FileInterceptor cho tất cả tệp
 import { RolePermissionService } from './role-permission.service'
-import { FileUploadDto } from '@/user-role/user-role.dto'
+
+import { RolePermissionFileUploadDto } from '@/role-permission/role.permssion.dto'
 
 @Controller('role-permission')
 @ApiTags('Role Permission')
@@ -24,7 +25,7 @@ export class RolePermissionController {
   async uploadFiles(
     @UploadedFiles()
     files: { files?: MemoryStorageFile; nestjsDir?: MemoryStorageFile },
-    @Body() body: FileUploadDto,
+    @Body() body: RolePermissionFileUploadDto,
   ) {
     if (!files.files || !files.nestjsDir) {
       throw new Error('Both XML and NestJS project files are required')

@@ -31,8 +31,16 @@ export class RolePermissionService {
 
     this.buildRules(modules)
 
-    console.log('======================== Rules: ', this.rules)
-    console.log('======================== Permissions: ', this.permissions)
+    console.log(
+      '======================== Rules: ',
+      this.rules.length,
+      this.rules,
+    )
+    console.log(
+      '======================== Permissions: ',
+      this.permissions.length,
+      this.permissions,
+    )
 
     this.filterRedundantPermissions(this.permissions, this.rules)
     this.filterLackRules(this.permissions, this.rules)
@@ -83,7 +91,7 @@ export class RolePermissionService {
       const filePath = path.join(srcDir, file)
       const stat = fs.statSync(filePath)
       if (stat.isDirectory()) {
-        controllerFiles.push(...this.getControllerFiles(filePath)) // Recursively scan subdirectories
+        controllerFiles.push(...this.getControllerFiles(filePath))
       } else if (file.endsWith('.controller.ts')) {
         controllerFiles.push(filePath) // Save controller file
       }
@@ -117,8 +125,6 @@ export class RolePermissionService {
       ...this.getDecoratorByName(sourceFile, 'Put'),
       ...this.getDecoratorByName(sourceFile, 'Delete'),
     ]
-
-    const checkPermissionCalls = this.getCheckPermissionCalls(sourceFile)
 
     let resource = ''
     if (controllerDecorator.length > 0) {
@@ -164,9 +170,11 @@ export class RolePermissionService {
       })
     }
 
+    const checkPermissionConditions = this.getCheckPermissionCalls(sourceFile)
+
     let conditions: string[] = []
-    if (checkPermissionCalls.length > 0) {
-      conditions = checkPermissionCalls.map((call) => {
+    if (checkPermissionConditions.length > 0) {
+      conditions = checkPermissionConditions.map((call) => {
         if (ts.isCallExpression(call)) {
           const conditionArg = call.arguments[2]
           if (ts.isStringLiteral(conditionArg)) {
@@ -174,7 +182,6 @@ export class RolePermissionService {
             return conditionArg.text
           }
         }
-
         return ''
       })
     }
