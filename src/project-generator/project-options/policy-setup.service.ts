@@ -147,6 +147,13 @@ import { PolicyHandler } from '@/policy/policy.decorator';
 import { PolicyHandlerBase } from '@/policy/policy.handler';
 
 `
+    let defaultPolicyContent = `@Injectable()
+export class defaultPolicy extends PolicyHandlerBase {
+  constructor() {
+    super('');
+  }
+}`
+    policyContent += defaultPolicyContent
     // Generate policy handlers for each rule that has conditions
     for (const rule of rules) {
       if (rule.Condition && rule.Condition[0].Restriction) {
@@ -230,12 +237,12 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { PoliciesGuard } from '@/policy/policies.guard';
 import { CheckPolicies } from '@/policy/policy.decorator';
 `
+
     // Import policy files
     let hasPolicyImports = false
     for (const rule of rules) {
       if (rule.Condition && rule.Condition[0].Restriction) {
         if (!hasPolicyImports) {
-          imports += `// Import policy cho từng route\n`
           hasPolicyImports = true
         }
         const methodName = rule.Name?.[0] ?? 'defaultMethodName'

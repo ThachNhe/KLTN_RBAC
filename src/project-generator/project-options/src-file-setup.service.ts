@@ -56,30 +56,21 @@ CMD ["./bin/dev.sh"]
   postgres:
     image: postgres:16.3-alpine
     environment:
-      POSTGRES_USER: ${`DB_USER`}
-      POSTGRES_PASSWORD: ${`DB_PASS`}
-      POSTGRES_DB_MAIN: ${`DB_MAIN`}
-      POSTGRES_DB_TEST: ${`DB_TEST`}
+      POSTGRES_USER: \${DB_USER}
+      POSTGRES_PASSWORD: \${DB_PASS}
+      POSTGRES_DB_MAIN: \${DB_MAIN}
+      POSTGRES_DB_TEST: \${DB_TEST}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - ${`DB_PORT`}:5432
+      - \${DB_PORT}:5432
     volumes:
       - pg_data:/var/lib/postgresql/data/pgdata
       - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     networks:
       - backend
 
-  mailpit:
-    image: axllent/mailpit
-    ports:
-      - 8025:8025
-      - 1025:1025
-    networks:
-      - backend
-
 volumes:
   pg_data:
-
     `
     fs.writeFileSync(
       path.join(projectPath, 'docker-compose.yml'),
