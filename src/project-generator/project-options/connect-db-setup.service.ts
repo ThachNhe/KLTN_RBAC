@@ -27,6 +27,8 @@ export class ConnectDbSetupService {
 
       await this.updateEnvironmentFiles(projectPath)
 
+      await this.createInitDBScript(projectPath)
+
       this.logger.debug('Auth setup completed')
     } catch (error) {
       this.logger.error(`Failed to setup auth: ${error.message}`)
@@ -45,6 +47,7 @@ export class ConnectDbSetupService {
       '@faker-js/faker': '^9.0.3',
       '@mikro-orm/seeder': '^6.3.13',
       '@mikro-orm/nestjs': '6.0.2',
+      '@mikro-orm/migrations': '^6.4.7',
     }
 
     packageJson.devDependencies = {
@@ -52,6 +55,16 @@ export class ConnectDbSetupService {
       '@nestjs/cli': '^10.4.5',
       '@types/passport-jwt': '^4.0.1',
       '@types/bcrypt': '^5.0.2',
+      '@mikro-orm/cli': '^6.4.7',
+    }
+
+    packageJson.scripts = {
+      ...packageJson.scripts,
+      'db:up': 'mikro-orm migration:up',
+      'db:migrate': 'mikro-orm schema:drop && mikro-orm migration:create',
+      'db:fresh': 'mikro-orm migration:fresh',
+      'db:seed': 'mikro-orm migration:fresh --seed',
+      'db:test': 'NODE_ENV=test mikro-orm migration:fresh --seed',
     }
 
     await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 })
@@ -62,7 +75,7 @@ export class ConnectDbSetupService {
     const dbDir = path.join(projectPath, 'src/db')
     const entitiesDir = path.join(dbDir, 'entities')
     const factoryDir = path.join(dbDir, 'factories')
-    const seedDir = path.join(dbDir, 'seeds')
+    const seedDir = path.join(dbDir, 'seeders')
 
     await fs.ensureDir(dbDir)
     fs.ensureDirSync(entitiesDir)
@@ -256,12 +269,22 @@ export default dbConfig;
     // Create .env and .env.example files
     const envContent = `DB_USER=root
 DB_PASS=123
-DB_MAIN=main_db
-DB_TEST=test_db
-DB_PORT=5432
+DB_MAIN=postgres-db
+DB_TEST=postgres-test
+DB_PORT=4000
 DB_HOST=localhost
+POSTGRES_USER=root
+POSTGRES_DB_MAIN=postgres-db
+POSTGRES_DB_TEST=postgres-test
 `
     await fs.writeFile(path.join(projectPath, '.env'), envContent)
     await fs.writeFile(path.join(projectPath, '.env.example'), envContent)
+  }
+
+  private async createInitDBScript(projectPath: string) {
+    const initDbContent = `psql -v --username "\${POSTGRES_USER}" -c "CREATE DATABASE \${POSTGRES_DB_MAIN};"
+psql -v --username "\${POSTGRES_USER}" -c "CREATE DATABASE \${POSTGRES_DB_TEST};"`
+
+    await fs.writeFile(path.join(projectPath, 'init-db.sh'), initDbContent)
   }
 }
