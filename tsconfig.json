@@ -20,5 +20,9 @@
     "paths": {
       "@/*": ["src/*"]
     }
-  }
+  }, 
+  "exclude": [
+    "uploads",
+    "uploads/nestjs-project"
+  ] 
 }

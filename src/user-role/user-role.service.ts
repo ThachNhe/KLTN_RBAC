@@ -16,6 +16,12 @@ export class UserRoleService {
 
   async checkUserRoleViolation(file: MemoryStorageFile) {
     try {
+      const connectionKey = await this.databaseService.getConnectionKey()
+      const pool = this.databaseService.getPool(connectionKey)
+      if (!(await this.databaseService.testConnection(pool))) {
+        throw new InternalServerErrorException('Connect Db first!!!')
+      }
+
       const [rolePermissionsDb, rolePermissionsCsv] = await Promise.all([
         this.retrieveDBData(),
         this.retrieveDataFromCSVFile(file),
