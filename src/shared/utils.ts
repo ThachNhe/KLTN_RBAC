@@ -1,7 +1,6 @@
 import 'dotenv/config'
 
 import { Snowyflake } from 'snowyflake'
-import { randomInt } from 'crypto'
 
 const snowyflake = new Snowyflake({
   workerId: BigInt(process.env.WORKER_ID || '1'),
@@ -70,11 +69,4 @@ export const HttpCodeMessages = {
   506: 'Variant Also Negotiates',
   507: 'Insufficient Storage',
   508: 'Loop Detected',
-}
-
-export function generateVerificationCode(length = 6) {
-  const min = Math.pow(10, length - 1)
-  const max = Math.pow(10, length) - 1
-  const code = randomInt(min, max + 1)
-  return code.toString()
 }

@@ -9,6 +9,6 @@ export class LlmController {
 
   @Get('test')
   getHello() {
-    return this.LlmService.getResourceName('')
+    // return this.LlmService.getResourceName('')
   }
 }
