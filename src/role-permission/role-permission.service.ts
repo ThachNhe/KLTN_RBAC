@@ -1,7 +1,12 @@
+import { LlmService } from '@/llm/llm.service'
+import {
+  extractNestJsProject,
+  getServiceContentFromControllerContent,
+  parseXML,
+} from '@/shared/role-permission'
 import { Injectable } from '@nestjs/common'
 import * as fs from 'fs'
 import * as path from 'path'
-import * as xml2js from 'xml2js'
 import * as ts from 'typescript'
 
 @Injectable()
@@ -9,15 +14,17 @@ export class RolePermissionService {
   private rules: any[] = []
   private permissions: any[] = []
 
+  constructor(private readonly llmService: LlmService) {}
+
   async checkProjectPermissions(xmlFileData: string, nestJsZipBuffer: Buffer) {
     const AdmZip = require('adm-zip')
     const zip = new AdmZip(nestJsZipBuffer)
     const entries = zip.getEntries()
 
     const extractPath = path.join(__dirname, '../../uploads', 'nestjs-project')
-    await this.extractNestJsProject(nestJsZipBuffer, extractPath)
+    await extractNestJsProject(nestJsZipBuffer, extractPath)
 
-    const modules = await this.parseXML(xmlFileData)
+    const modules = await parseXML(xmlFileData)
     let result = 'Permissions check result:\n'
 
     // Filter controller files
@@ -34,7 +41,7 @@ export class RolePermissionService {
     for (const entry of controllerEntries) {
       const fileContent = entry.getData().toString('utf8')
       const controllerPermissions = this.getControllerPermissions(fileContent)
-      this.buildPermissions(controllerPermissions)
+      // this.buildPermissions(controllerPermissions)
     }
     this.buildRules(modules)
 
@@ -43,76 +50,17 @@ export class RolePermissionService {
       this.rules.length,
       this.rules,
     )
+
     console.log(
       '======================== Permissions: ',
       this.permissions.length,
       this.permissions,
     )
 
-    this.filterRedundantPermissions(this.permissions, this.rules)
-    this.filterLackRules(this.permissions, this.rules)
+    // this.filterRedundantPermissions(this.permissions, this.rules)
+    // this.filterLackRules(this.permissions, this.rules)
 
     return result
-  }
-
-  async parseXML(xmlFileData: string): Promise<any[]> {
-    const parser = new xml2js.Parser({ explicitArray: false })
-    return new Promise((resolve, reject) => {
-      parser.parseString(xmlFileData, (err, result) => {
-        if (err) {
-          reject('Error parsing XML')
-        }
-        resolve(result.Policys.Module)
-      })
-    })
-  }
-
-  private async extractNestJsProject(zipBuffer: Buffer, extractPath: string) {
-    if (fs.existsSync(extractPath)) {
-      fs.rmSync(extractPath, { recursive: true, force: true })
-    }
-
-    // Create extract directory
-    fs.mkdirSync(extractPath, { recursive: true })
-
-    return new Promise((resolve, reject) => {
-      try {
-        const AdmZip = require('adm-zip')
-        const zip = new AdmZip(zipBuffer)
-        const entries = zip.getEntries()
-
-        // Filter src entries
-        const srcEntries = entries.filter(
-          (entry) =>
-            entry.entryName.startsWith('src/') || entry.entryName === 'src',
-        )
-
-        // Only extract src entries
-        for (const entry of srcEntries) {
-          if (entry.isDirectory) {
-            const targetDir = path.join(extractPath, entry.entryName)
-            if (!fs.existsSync(targetDir)) {
-              fs.mkdirSync(targetDir, { recursive: true })
-            }
-          } else {
-            const fileData = entry.getData()
-            const targetPath = path.join(extractPath, entry.entryName)
-
-            const parentDir = path.dirname(targetPath)
-            if (!fs.existsSync(parentDir)) {
-              fs.mkdirSync(parentDir, { recursive: true })
-            }
-
-            fs.writeFileSync(targetPath, fileData)
-          }
-        }
-
-        resolve('Extraction completed - src only')
-      } catch (error) {
-        console.error('Failed to extract:', error)
-        reject(error)
-      }
-    })
   }
 
   private getControllerFiles(srcDir: string): string[] {
@@ -132,9 +80,7 @@ export class RolePermissionService {
     return controllerFiles
   }
 
-  private getControllerPermissions(
-    fileContent: string,
-  ): { role: string; action: string; resource: string; condition: string }[] {
+  private async getControllerPermissions(fileContent: string) {
     const permissions = []
 
     const sourceFile = ts.createSourceFile(
@@ -145,11 +91,6 @@ export class RolePermissionService {
       ts.ScriptKind.TS,
     )
 
-    const controllerDecorator = this.getDecoratorByName(
-      sourceFile,
-      'Controller',
-    )
-
     const rolesDecorator = this.getDecoratorByName(sourceFile, 'Roles')
     const actionsDecorators = [
       ...this.getDecoratorByName(sourceFile, 'Get'),
@@ -158,19 +99,26 @@ export class RolePermissionService {
       ...this.getDecoratorByName(sourceFile, 'Delete'),
     ]
 
-    let resource = ''
-    if (controllerDecorator.length > 0) {
-      const controllerExpression = controllerDecorator[0].expression
-      if (
-        ts.isCallExpression(controllerExpression) &&
-        controllerExpression.arguments.length > 0
-      ) {
-        const arg = controllerExpression.arguments[0]
-        if (ts.isStringLiteral(arg)) {
-          resource = arg.text
-        }
-      }
-    }
+    let resource
+
+    let serviceMethods = await this.extractServiceMethods(fileContent)
+
+    console.log('Service methods: ', serviceMethods)
+
+    const extractPath = path.join(__dirname, '../../uploads', 'nestjs-project')
+
+    const serviceContent = await getServiceContentFromControllerContent(
+      fileContent,
+      extractPath,
+    )
+
+    // console.log('controller file: ', fileContent)
+    // console.log('check service content: ', serviceContent)
+
+    resource = await this.llmService.getResourceName(
+      serviceMethods,
+      serviceContent?.content,
+    )
 
     let roles: string[] = []
     if (rolesDecorator.length > 0) {
@@ -210,7 +158,6 @@ export class RolePermissionService {
         if (ts.isCallExpression(call)) {
           const conditionArg = call.arguments[2]
           if (ts.isStringLiteral(conditionArg)) {
-            // console.log('Condition arg: ', conditionArg.text)
             return conditionArg.text
           }
         }
@@ -342,5 +289,35 @@ export class RolePermissionService {
 
     visitNode(sourceFile)
     return calls
+  }
+
+  private async extractServiceMethods(controllerCode) {
+    // Remove comments
+    const cleanCode = controllerCode
+      .replace(/\/\/.*$/gm, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+
+    const constructorMatch = cleanCode.match(
+      /constructor\s*\(\s*(?:(?:private|protected|public)\s+)?(?:readonly\s+)?(?:(?:private|protected|public)\s+)?(\w+)\s*:/,
+    )
+
+    if (!constructorMatch || !constructorMatch[1]) {
+      return {
+        success: false,
+        error: 'Cannot find service constructor',
+        functions: [],
+      }
+    }
+
+    const serviceName = constructorMatch[1]
+
+    console.log('Service name: ', serviceName)
+
+    const methodPattern = new RegExp(`this\\.${serviceName}\\.(\\w+)\\(`, 'g')
+    const matches = [...cleanCode.matchAll(methodPattern)]
+
+    const methodNames = [...new Set(matches.map((match) => match[1]))].sort()
+
+    return methodNames
   }
 }
