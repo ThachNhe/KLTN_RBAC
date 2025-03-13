@@ -93,7 +93,7 @@ volumes:
 
     const eslintConfig = require(eslintConfigPath)
 
-    console.log('eslintConfig', eslintConfig)
+    // console.log('eslintConfig', eslintConfig)
     eslintConfig.rules = {
       ...eslintConfig.rules,
       '@typescript-eslint/no-unused-vars': [
