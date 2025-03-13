@@ -26,7 +26,7 @@ export class RolePermissionFileUploadDto {
   })
   files: MemoryStorageFile
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     type: 'array',
     items: {
       type: 'string',

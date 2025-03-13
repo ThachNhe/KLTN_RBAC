@@ -4,7 +4,7 @@ import {
   FileFieldsInterceptor,
   MemoryStorageFile,
   UploadedFiles,
-} from '@blazity/nest-file-fastify' // Dùng FileInterceptor cho tất cả tệp
+} from '@blazity/nest-file-fastify'
 import { RolePermissionService } from './role-permission.service'
 import { RolePermissionFileUploadDto } from '@/role-permission/role.permssion.dto'
 
@@ -23,7 +23,7 @@ export class RolePermissionController {
   )
   async uploadFiles(
     @UploadedFiles()
-    files: { files?: MemoryStorageFile; nestjsDir?: MemoryStorageFile },
+    files: { files: MemoryStorageFile; nestjsDir: MemoryStorageFile },
     @Body() body: RolePermissionFileUploadDto,
   ) {
     if (!files.files || !files.nestjsDir) {

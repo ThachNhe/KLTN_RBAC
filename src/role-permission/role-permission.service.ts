@@ -1,11 +1,13 @@
 import { LlmService } from '@/llm/llm.service'
 import {
+  extractConstraints,
   extractNestJsProject,
+  extractResourceNames,
+  getPolicyContentFromControllerContent,
   getServiceContentFromControllerContent,
   parseXML,
 } from '@/shared/role-permission'
 import { Injectable } from '@nestjs/common'
-import * as fs from 'fs'
 import * as path from 'path'
 import * as ts from 'typescript'
 
@@ -33,15 +35,13 @@ export class RolePermissionService {
         entry.entryName.endsWith('.controller.ts') && !entry.isDirectory,
     )
 
-    console.log(
-      'Found controller files:',
-      controllerEntries.map((e) => e.entryName),
-    )
-
     for (const entry of controllerEntries) {
       const fileContent = entry.getData().toString('utf8')
-      const controllerPermissions = this.getControllerPermissions(fileContent)
-      // this.buildPermissions(controllerPermissions)
+      const controllerPermissions = await this.getControllerPermissions(
+        fileContent,
+        extractPath,
+      )
+      this.buildPermissions(controllerPermissions)
     }
     this.buildRules(modules)
 
@@ -57,30 +57,19 @@ export class RolePermissionService {
       this.permissions,
     )
 
-    // this.filterRedundantPermissions(this.permissions, this.rules)
-    // this.filterLackRules(this.permissions, this.rules)
+    this.filterRedundantPermissions(this.permissions, this.rules)
+    this.filterLackRules(this.permissions, this.rules)
+
+    this.rules = []
+    this.permissions = []
 
     return result
   }
 
-  private getControllerFiles(srcDir: string): string[] {
-    const controllerFiles: string[] = []
-    const files = fs.readdirSync(srcDir)
-
-    files.forEach((file) => {
-      const filePath = path.join(srcDir, file)
-      const stat = fs.statSync(filePath)
-      if (stat.isDirectory()) {
-        controllerFiles.push(...this.getControllerFiles(filePath))
-      } else if (file.endsWith('.controller.ts')) {
-        controllerFiles.push(filePath) // Save controller file
-      }
-    })
-
-    return controllerFiles
-  }
-
-  private async getControllerPermissions(fileContent: string) {
+  private async getControllerPermissions(
+    fileContent: string,
+    projectPath: string,
+  ) {
     const permissions = []
 
     const sourceFile = ts.createSourceFile(
@@ -92,6 +81,7 @@ export class RolePermissionService {
     )
 
     const rolesDecorator = this.getDecoratorByName(sourceFile, 'Roles')
+
     const actionsDecorators = [
       ...this.getDecoratorByName(sourceFile, 'Get'),
       ...this.getDecoratorByName(sourceFile, 'Post'),
@@ -99,11 +89,12 @@ export class RolePermissionService {
       ...this.getDecoratorByName(sourceFile, 'Delete'),
     ]
 
-    let resource
+    let resourceString = ''
+    let resource = []
 
     let serviceMethods = await this.extractServiceMethods(fileContent)
 
-    console.log('Service methods: ', serviceMethods)
+    // console.log('Service methods: ', serviceMethods)
 
     const extractPath = path.join(__dirname, '../../uploads', 'nestjs-project')
 
@@ -112,13 +103,43 @@ export class RolePermissionService {
       extractPath,
     )
 
-    // console.log('controller file: ', fileContent)
-    // console.log('check service content: ', serviceContent)
+    let controllerOperations = await this.getControllerOperations(fileContent)
+    let constraintPolicies = await this.getConstraintPolicies(
+      controllerOperations,
+      fileContent,
+    )
 
-    resource = await this.llmService.getResourceName(
+    let policyContent = await getPolicyContentFromControllerContent(
+      fileContent,
+      extractPath,
+    )
+
+    // console.log('Controller operations: ', controllerOperations)
+    // console.log('Constraint decorators: ', constraintPolicies)
+    // console.log('Policy content: ', policyContent)
+
+    let conditionString = ''
+    let conditions = []
+    if (constraintPolicies) {
+      conditionString = await this.llmService.getConstraint(
+        controllerOperations,
+        constraintPolicies,
+        policyContent[0]?.content || '',
+      )
+      conditions = extractConstraints(conditionString)
+      console.log('ConditionsString:======= ', conditionString)
+
+      // console.log('Conditions:======= ', conditions)
+    }
+
+    resourceString = await this.llmService.getResourceName(
       serviceMethods,
       serviceContent?.content,
     )
+
+    resource = extractResourceNames(resourceString)
+
+    // console.log('Resource======================: ', resourceString)
 
     let roles: string[] = []
     if (rolesDecorator.length > 0) {
@@ -150,28 +171,13 @@ export class RolePermissionService {
       })
     }
 
-    const checkPermissionConditions = this.getCheckPermissionCalls(sourceFile)
-
-    let conditions: string[] = []
-    if (checkPermissionConditions.length > 0) {
-      conditions = checkPermissionConditions.map((call) => {
-        if (ts.isCallExpression(call)) {
-          const conditionArg = call.arguments[2]
-          if (ts.isStringLiteral(conditionArg)) {
-            return conditionArg.text
-          }
-        }
-        return ''
-      })
-    }
-
     const maxLength = Math.max(actions.length, roles.length)
 
     for (let i = 0; i < maxLength; i++) {
       permissions.push({
         role: roles[i] || '',
         action: actions[i] || '',
-        resource: resource,
+        resource: resource[i] || '',
         condition: conditions[i] || '',
       })
     }
@@ -192,12 +198,13 @@ export class RolePermissionService {
       }
       ts.forEachChild(node, visitNode)
     }
+
     visitNode(sourceFile)
     return decorators
   }
 
   private buildRules(modules: any) {
-    console.log('Modules: ', modules)
+    // console.log('Modules: ', modules)
 
     for (const module of modules) {
       let controllers = Array.isArray(module.Controller1)
@@ -231,7 +238,7 @@ export class RolePermissionService {
   private equalCompare(rule: any, permission: any): boolean {
     return (
       rule.role.toLowerCase() === permission.role.toLowerCase() &&
-      rule.action.toUpperCase() === permission.action.toUpperCase() &&
+      rule.action.toLowerCase() === permission.action.toLowerCase() &&
       rule.resource.toLowerCase() === permission.resource.toLowerCase() &&
       rule.condition === permission.condition
     )
@@ -271,26 +278,6 @@ export class RolePermissionService {
     }
   }
 
-  private getCheckPermissionCalls(sourceFile: ts.SourceFile) {
-    const calls: ts.CallExpression[] = []
-
-    const visitNode = (node: ts.Node) => {
-      if (ts.isCallExpression(node)) {
-        const expression = node.expression
-        if (
-          ts.isPropertyAccessExpression(expression) &&
-          expression.name.text === 'checkPermission'
-        ) {
-          calls.push(node)
-        }
-      }
-      ts.forEachChild(node, visitNode)
-    }
-
-    visitNode(sourceFile)
-    return calls
-  }
-
   private async extractServiceMethods(controllerCode) {
     // Remove comments
     const cleanCode = controllerCode
@@ -311,13 +298,90 @@ export class RolePermissionService {
 
     const serviceName = constructorMatch[1]
 
-    console.log('Service name: ', serviceName)
-
     const methodPattern = new RegExp(`this\\.${serviceName}\\.(\\w+)\\(`, 'g')
     const matches = [...cleanCode.matchAll(methodPattern)]
+
+    // console.log('Matches: ', matches)
 
     const methodNames = [...new Set(matches.map((match) => match[1]))].sort()
 
     return methodNames
+  }
+
+  private async getControllerOperations(controllerContent: string) {
+    const sourceFile = ts.createSourceFile(
+      'controller.ts',
+      controllerContent,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    )
+
+    const methodNames: string[] = []
+
+    function visit(node: ts.Node) {
+      if (
+        ts.isMethodDeclaration(node) &&
+        node.name &&
+        ts.isIdentifier(node.name)
+      ) {
+        methodNames.push(node.name.text)
+      }
+
+      ts.forEachChild(node, visit)
+    }
+
+    visit(sourceFile)
+
+    return methodNames
+  }
+
+  private async getConstraintPolicies(
+    operations: string[],
+    controllerContent: string,
+  ) {
+    // Object to store the results
+    const result: Record<string, string[]> = {}
+
+    // Initialize result with empty arrays for all requested operations
+    operations.forEach((op) => {
+      result[op] = []
+    })
+
+    // Process the controller content for each operation
+    operations.forEach((operation) => {
+      // Find the method definition for this operation
+      const methodRegex = new RegExp(`\\s+${operation}\\s*\\(`, 'i')
+      const methodMatch = controllerContent.match(methodRegex)
+
+      if (methodMatch) {
+        // Find the position of the method
+        const methodPos = methodMatch.index
+
+        if (methodPos) {
+          // Look backwards from the method to find the CheckPolicies decorator
+          const sectionStart = Math.max(0, methodPos - 200) // Look back 200 chars at most
+          const methodSection = controllerContent.substring(
+            sectionStart,
+            methodPos,
+          )
+
+          // Extract policy from CheckPolicies decorator
+          const policyMatch = methodSection.match(
+            /@CheckPolicies\(new\s+(\w+)\(\)\)/,
+          )
+
+          if (policyMatch && policyMatch[1]) {
+            result[operation].push(policyMatch[1])
+          }
+        }
+      }
+    })
+
+    // Format the output as requested: "operation: [Policy1, Policy2], ..."
+    return operations
+      .filter((op) => result[op].length > 0)
+      .map((op) => `${op}: [${result[op].join(', ')}]`)
+      .join(', ')
   }
 }
