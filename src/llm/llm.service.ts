@@ -94,7 +94,7 @@ If there are no constraints, return an empty string. Source code: """ ${policyFi
                   content: prompt,
                 },
               ],
-              max_tokens: this.configService.get<number>('MAX_TOKENS'),
+              max_tokens: Number(this.configService.get<number>('MAX_TOKENS')),
               temperature: Number(
                 this.configService.get<number>('TEMPERATURE'),
               ),
