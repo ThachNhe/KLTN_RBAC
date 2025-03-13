@@ -7,13 +7,11 @@ import * as xml2js from 'xml2js'
 export class PolicySetupService {
   private readonly logger = new Logger(PolicySetupService.name)
 
-  async setup(projectPath: string, configXmlPath: string): Promise<void> {
+  async setup(projectPath: string, fileBuffer: string): Promise<void> {
     try {
-      // Read XML content
-      const xmlContent = await fs.readFile(configXmlPath, 'utf8')
-
       // Parse XML to JSON
-      const data = await xml2js.parseStringPromise(xmlContent)
+      const data = await xml2js.parseStringPromise(fileBuffer)
+      console.log('XML Content in project:', data)
 
       const modules = data?.Policys?.Module || []
       if (!modules.length) {

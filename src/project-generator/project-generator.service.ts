@@ -1,16 +1,16 @@
-import { SrcFileSetupService } from './project-options/src-file-setup.service'
-import { PolicySetupService } from './project-options/policy-setup.service'
+import { ProjectOptions } from '@/project-generator/project-generator.interface'
+import { AuthServiceSetup } from '@/project-generator/project-options/auth-setup.service'
+import { AuthorizationSetupService } from '@/project-generator/project-options/authorization-setup.service'
+import { ConnectDbSetupService } from '@/project-generator/project-options/connect-db-setup.service'
+import { SharedSetupService } from '@/project-generator/project-options/shared-setup.service'
+import { SwaggerSetupService } from '@/project-generator/project-options/swagger-setup.service'
 import { Injectable, Logger } from '@nestjs/common'
 import { exec } from 'child_process'
 import * as fs from 'fs-extra'
 import * as path from 'path'
+import { PolicySetupService } from './project-options/policy-setup.service'
+import { SrcFileSetupService } from './project-options/src-file-setup.service'
 import archiver = require('archiver')
-import { ProjectOptions } from '@/project-generator/project-generator.interface'
-import { SwaggerSetupService } from '@/project-generator/project-options/swagger-setup.service'
-import { AuthServiceSetup } from '@/project-generator/project-options/auth-setup.service'
-import { AuthorizationSetupService } from '@/project-generator/project-options/authorization-setup.service'
-import { SharedSetupService } from '@/project-generator/project-options/shared-setup.service'
-import { ConnectDbSetupService } from '@/project-generator/project-options/connect-db-setup.service'
 
 @Injectable()
 export class ProjectGeneratorService {
@@ -23,7 +23,10 @@ export class ProjectGeneratorService {
   private readonly srcFileSetupService = new SrcFileSetupService()
   private readonly connectDbSetupService = new ConnectDbSetupService()
 
-  async generateProjectZip(options: ProjectOptions): Promise<Buffer> {
+  async generateProjectZip(
+    options: ProjectOptions,
+    fileBuffer: string,
+  ): Promise<Buffer> {
     const tempDir = path.join(process.cwd(), 'temp')
     const projectPath = path.join(tempDir, options.name)
 
@@ -37,7 +40,7 @@ export class ProjectGeneratorService {
       this.logger.debug(`Project generated at ${projectPath}`)
 
       // Customize project if needed
-      await this.customizeProject(projectPath, options)
+      await this.customizeProject(projectPath, options, fileBuffer)
       this.logger.debug('Project customization completed')
 
       // Create ZIP from the generated project
@@ -87,6 +90,7 @@ export class ProjectGeneratorService {
   private async customizeProject(
     projectPath: string,
     options: ProjectOptions,
+    fileBuffer: string,
   ): Promise<void> {
     try {
       // Customize package.json
@@ -105,7 +109,6 @@ export class ProjectGeneratorService {
         this.logger.debug('Swagger setup completed')
       }
 
-      // console.log('check option ===================', options)
       // Set up Auth if needed
       if (options.auth) {
         await this.authServiceSetup.setup(projectPath)
@@ -116,8 +119,8 @@ export class ProjectGeneratorService {
       // Set up Authorization if needed
       await this.authorizationSetupService.setup(projectPath)
 
-      const configXmlPath = './role-permission-config.xml'
-      await this.policySetupService.setup(projectPath, configXmlPath)
+      // const configXmlPath = './role-permission-config.xml'
+      await this.policySetupService.setup(projectPath, fileBuffer)
 
       // Add message to README.md
       const readmePath = path.join(projectPath, 'README.md')
