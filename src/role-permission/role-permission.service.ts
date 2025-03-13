@@ -10,6 +10,7 @@ import {
 import { Injectable } from '@nestjs/common'
 import * as path from 'path'
 import * as ts from 'typescript'
+import * as fs from 'fs'
 
 @Injectable()
 export class RolePermissionService {
@@ -24,46 +25,67 @@ export class RolePermissionService {
     const entries = zip.getEntries()
 
     const extractPath = path.join(__dirname, '../../uploads', 'nestjs-project')
-    await extractNestJsProject(nestJsZipBuffer, extractPath)
+    try {
+      await extractNestJsProject(nestJsZipBuffer, extractPath)
 
-    const modules = await parseXML(xmlFileData)
-    let result = 'Permissions check result:\n'
+      const modules = await parseXML(xmlFileData)
 
-    // Filter controller files
-    const controllerEntries = entries.filter(
-      (entry) =>
-        entry.entryName.endsWith('.controller.ts') && !entry.isDirectory,
-    )
-
-    for (const entry of controllerEntries) {
-      const fileContent = entry.getData().toString('utf8')
-      const controllerPermissions = await this.getControllerPermissions(
-        fileContent,
-        extractPath,
+      // Filter controller files
+      const controllerEntries = entries.filter(
+        (entry) =>
+          entry.entryName.endsWith('.controller.ts') &&
+          !entry.isDirectory &&
+          !entry.entryName.includes('/auth/') &&
+          !entry.entryName.endsWith('app.controller.ts'),
       )
-      this.buildPermissions(controllerPermissions)
+
+      const controllerFiles = controllerEntries.map((entry) => entry.entryName)
+      console.log('Controller files: ', controllerFiles)
+
+      for (const entry of controllerEntries) {
+        const fileContent = entry.getData().toString('utf8')
+
+        const controllerPermissions = await this.getControllerPermissions(
+          fileContent,
+          extractPath,
+        )
+        this.buildPermissions(controllerPermissions)
+      }
+      this.buildRules(modules)
+
+      console.log(
+        '======================== Rules: ',
+        this.rules.length,
+        this.rules,
+      )
+
+      console.log(
+        '======================== Permissions: ',
+        this.permissions.length,
+        this.permissions,
+      )
+
+      const redundantRule = this.filterRedundantPermissions(
+        this.permissions,
+        this.rules,
+      )
+      const lackRule = this.filterLackRules(this.permissions, this.rules)
+
+      this.rules = []
+      this.permissions = []
+
+      return {
+        redundantRule,
+        lackRule,
+      }
+    } catch (error) {
+      throw new Error("Can't check project permissions")
+    } finally {
+      // if (fs.existsSync(extractPath)) {
+      //   fs.rmSync(extractPath, { recursive: true, force: true })
+      //   console.log(`Cleaned up extracted project at: ${extractPath}`)
+      // }
     }
-    this.buildRules(modules)
-
-    console.log(
-      '======================== Rules: ',
-      this.rules.length,
-      this.rules,
-    )
-
-    console.log(
-      '======================== Permissions: ',
-      this.permissions.length,
-      this.permissions,
-    )
-
-    this.filterRedundantPermissions(this.permissions, this.rules)
-    this.filterLackRules(this.permissions, this.rules)
-
-    this.rules = []
-    this.permissions = []
-
-    return result
   }
 
   private async getControllerPermissions(
@@ -127,7 +149,7 @@ export class RolePermissionService {
         policyContent[0]?.content || '',
       )
       conditions = extractConstraints(conditionString)
-      console.log('ConditionsString:======= ', conditionString)
+      // console.log('ConditionsString:======= ', conditionString)
 
       // console.log('Conditions:======= ', conditions)
     }
@@ -254,11 +276,14 @@ export class RolePermissionService {
   }
 
   private filterRedundantPermissions(permissions: any[], rules: any[]) {
+    const result = []
     for (const permission of permissions) {
       if (!this.checkPermissionIsMatchToConfigFile(rules, permission)) {
-        console.log('Redundant=====: ', permission)
+        // console.log('Redundant=====: ', permission)
+        result.push(permission)
       }
     }
+    return result
   }
 
   private checkLackRuleToPermissions(permissions: any[], rule: any) {
@@ -271,11 +296,14 @@ export class RolePermissionService {
   }
 
   private filterLackRules(permissions: any[], rules: any[]) {
+    const result = []
     for (const rule of rules) {
       if (!this.checkLackRuleToPermissions(permissions, rule)) {
-        console.log('Lack ======: ', rule)
+        // console.log('Lack ======: ', rule)
+        result.push(rule)
       }
     }
+    return result
   }
 
   private async extractServiceMethods(controllerCode) {

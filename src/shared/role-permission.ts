@@ -23,13 +23,14 @@ export const extractNestJsProject = async (
       // Filter src entries
       const srcEntries = entries.filter(
         (entry) =>
-          entry.entryName.startsWith('src/') || entry.entryName === 'src',
+          (entry.entryName.startsWith('src/') || entry.entryName === 'src') &&
+          !entry.entryName.includes('src/auth/') &&
+          entry.entryName !== 'src/auth',
       )
 
       // Only extract src entries
       for (const entry of srcEntries) {
         if (entry.isDirectory) {
-          if (entry.entryName === 'auth') continue
           const targetDir = path.join(extractPath, entry.entryName)
           if (!fs.existsSync(targetDir)) {
             fs.mkdirSync(targetDir, { recursive: true })
