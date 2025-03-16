@@ -24,7 +24,7 @@ export class RolePermissionFileUploadDto {
     },
     description: 'upload xml file',
   })
-  files: MemoryStorageFile
+  file: MemoryStorageFile
 
   @ApiProperty({
     type: 'array',
@@ -34,5 +34,5 @@ export class RolePermissionFileUploadDto {
     },
     description: 'NestJS project files',
   })
-  nestjsDir: MemoryStorageFile
+  projectFile: MemoryStorageFile
 }

@@ -17,4 +17,8 @@ export class DatabaseConnectionDto {
   @ApiProperty()
   @IsString()
   database: string
+
+  @ApiProperty()
+  @IsString()
+  port: string
 }
