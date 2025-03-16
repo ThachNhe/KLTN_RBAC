@@ -1,5 +1,5 @@
 import { MemoryStorageFile } from '@blazity/nest-file-fastify'
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import {
   IsString,
   IsEnum,
@@ -49,7 +49,7 @@ export class CreateProjectDto {
   auth?: boolean
 
   @IsOptional()
-  @ApiProperty({
+  @ApiPropertyOptional({
     type: 'array',
     items: {
       type: 'string',
