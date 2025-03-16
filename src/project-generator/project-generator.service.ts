@@ -110,11 +110,9 @@ export class ProjectGeneratorService {
       }
 
       // Set up Auth if needed
-      if (options.auth) {
-        await this.authServiceSetup.setup(projectPath)
-        await this.connectDbSetupService.setup(projectPath)
-        this.logger.debug('Auth setup completed')
-      }
+      await this.authServiceSetup.setup(projectPath)
+      await this.connectDbSetupService.setup(projectPath)
+      this.logger.debug('Auth setup completed')
 
       // Set up Authorization if needed
       await this.authorizationSetupService.setup(projectPath)
