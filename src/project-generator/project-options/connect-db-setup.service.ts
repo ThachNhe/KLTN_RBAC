@@ -127,7 +127,39 @@ export class User {
 
 
 `
-    const entityIndexContent = `export * from './user.entity'`
+
+    const roleEntityContent = `import {
+  Entity,
+  PrimaryKey,
+  Property,
+  ManyToMany,
+  Collection,
+} from '@mikro-orm/core';
+import { ApiProperty } from '@nestjs/swagger';
+import { User } from './User';
+
+@Entity({ tableName: 'roles' })
+export class Role {
+  @PrimaryKey({ type: 'bigint' })
+  @ApiProperty()
+  id: number;
+
+  @Property()
+  @ApiProperty()
+  name: string;
+
+  @Property({ nullable: true })
+  @ApiProperty()
+  description?: string;
+
+  @ManyToMany(() => User, (user) => user.roles)
+  @ApiProperty({ type: () => [User] })
+  users = new Collection<User>(this);
+}
+`
+
+    const entityIndexContent = `export * from './user.entity'\n
+    export * from './role.entity'`
 
     // user.factory.ts
     const userFactoryContent = `import { User } from '@/db/entities';
@@ -152,8 +184,32 @@ export class UserFactory extends Factory<User> {
   }
 }
 `
-    const factoryIndexContent = `export * from './user.factory'`
+    // role.factory.ts
+    const roleFactoryContent = `import { faker } from '@faker-js/faker';
+import { Factory } from '@mikro-orm/seeder';
+import { Role } from '../entities/Role';
 
+export class RoleFactory extends Factory<Role> {
+  model = Role;
+
+  definition(): Partial<Role> {
+    return {
+      name: faker.helpers.arrayElement([
+        'Admin',
+        'User',
+        'Manager',
+        'Moderator',
+      ]),
+      description: faker.lorem.sentence(),
+    };
+  }
+}
+`
+
+    const factoryIndexContent = `export * from './user.factory'\n
+    export * from './role.factory'`
+
+    // user.seed.ts
     const userSeedContent = `import { UserFactory } from '@/db/factories';
 import type { EntityManager } from '@mikro-orm/core';
 import { Seeder } from '@mikro-orm/seeder';
@@ -172,7 +228,46 @@ export class UserSeeder extends Seeder {
   }
 }
 `
-    const seedIndexContent = `export * from './user.seed'`
+    // role.seed.ts
+    const roleSeedContent = `import type { EntityManager } from '@mikro-orm/core';
+import { Seeder } from '@mikro-orm/seeder';
+import { RoleFactory } from '../factories/role.factory';
+
+export class RoleSeeder extends Seeder {
+  async run(em: EntityManager) {
+    new RoleFactory(em).make(1, {
+      name: 'Admin',
+    });
+
+    new RoleFactory(em).make(1, {
+      name: 'User',
+    });
+
+    new RoleFactory(em).make(1, {
+      name: 'Manager',
+    });
+
+    new RoleFactory(em).make(1, {
+      name: 'Moderator',
+    });
+    //  new RoleFactory(em).make(10, {});
+  }
+}
+`
+    const seedIndexContent = `export * from './user.seed'\n
+    export * from './role.seed'`
+
+    const dbSeeder = `import { UserSeeder } from './UserSeeder';
+import { EntityManager } from '@mikro-orm/core';
+import { Seeder } from '@mikro-orm/seeder';
+import { RoleSeeder } from './RoleSeeder';
+
+export class DatabaseSeeder extends Seeder {
+  run(em: EntityManager) {
+    return this.call(em, [RoleSeeder, UserSeeder]);
+  }
+}
+`
 
     await fs.writeFile(
       path.join(entitiesDir, 'user.entity.ts'),
@@ -191,6 +286,20 @@ export class UserSeeder extends Seeder {
     await fs.writeFile(path.join(seedDir, 'user.seed.ts'), userSeedContent)
 
     await fs.writeFile(path.join(seedDir, 'index.ts'), seedIndexContent)
+
+    await fs.writeFile(
+      path.join(entitiesDir, 'role.entity.ts'),
+      roleEntityContent,
+    )
+
+    await fs.writeFile(
+      path.join(factoryDir, 'role.factory.ts'),
+      roleFactoryContent,
+    )
+
+    await fs.writeFile(path.join(seedDir, 'role.seed.ts'), roleSeedContent)
+
+    await fs.writeFile(path.join(dbDir, 'DatabaseSeeder.ts'), dbSeeder)
   }
 
   private async addMikroORMConfig(projectPath: string) {

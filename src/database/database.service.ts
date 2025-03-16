@@ -10,7 +10,7 @@ export class DatabaseService {
   // connectToDatabase method
   async connectToDatabase(body: DatabaseConnectionDto) {
     try {
-      const { ipAddress, username, password, database } = body
+      const { ipAddress, username, password, database, port } = body
       this.connectionKey = this.generateConnectionKey(body)
 
       // Check if a connection pool already exists
@@ -28,7 +28,7 @@ export class DatabaseService {
         user: username,
         password: password,
         database: database,
-        port: 5436,
+        port: parseInt(port),
         max: 10,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 2000,

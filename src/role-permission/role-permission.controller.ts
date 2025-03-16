@@ -17,23 +17,23 @@ export class RolePermissionController {
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
     FileFieldsInterceptor([
-      { name: 'files', maxCount: 1 },
-      { name: 'nestjsDir', maxCount: 1 },
+      { name: 'file', maxCount: 1 },
+      { name: 'projectFile', maxCount: 1 },
     ]),
   )
   async uploadFiles(
     @UploadedFiles()
-    files: { files: MemoryStorageFile; nestjsDir: MemoryStorageFile },
+    files: { file: MemoryStorageFile; projectFile: MemoryStorageFile },
     @Body() body: RolePermissionFileUploadDto,
   ) {
-    if (!files.files || !files.nestjsDir) {
+    if (!files.file || !files.projectFile) {
       throw new Error('Both XML and NestJS project files are required')
     }
 
-    const xmlFileData = files.files[0].buffer.toString('utf8')
+    const xmlFileData = files.file[0].buffer.toString('utf8')
     // console.log('XML File Data:', xmlFileData)
 
-    const nestJsZipData = files.nestjsDir[0].buffer
+    const nestJsZipData = files.projectFile[0].buffer
 
     return this.rolePermissionService.checkProjectPermissions(
       xmlFileData,
