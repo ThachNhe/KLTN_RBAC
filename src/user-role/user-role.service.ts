@@ -35,6 +35,9 @@ export class UserRoleService {
       const dbCopy = [...rolePermissionsDb]
       const csvCopy = [...rolePermissionsCsv]
 
+      // console.log('dbCopy: ', dbCopy)
+      // console.log('csvCopy: ', csvCopy)
+
       this.compareTwoRolePermission(dbCopy, csvCopy)
 
       const result = {
@@ -74,8 +77,10 @@ export class UserRoleService {
             this.logger.debug(`CSV parsed: ${results.data.length} rows found`)
 
             const normalizedData = results.data.map((item) => ({
-              email: item.email || item.user || '',
+              username: item.username || item.user || '',
               role: item.description || item.role || '',
+              firstName: item.firstName || item.first_name || '',
+              lastName: item.lastName || item.last_name || '',
             }))
 
             resolve(normalizedData)
@@ -110,7 +115,7 @@ export class UserRoleService {
       connection = await pool.connect()
 
       const query = `
-SELECT u.email as email , u.first_name, u.last_name , r."name" as role , u.created_at, u.updated_at
+SELECT u.username as username , u.first_name, u.last_name , r."name" as role
 FROM users u
 LEFT JOIN users_roles ur ON ur.user_id = u.id
 LEFT JOIN roles r ON r.id = ur.role_id;
@@ -162,6 +167,6 @@ LEFT JOIN roles r ON r.id = ur.role_id;
   }
 
   private createComparisonKey(item: RolePermission): string {
-    return `${item.email?.toLowerCase() || ''}_${item.role?.toLowerCase() || ''}`
+    return `${item.username?.toLowerCase() || ''}_${item.role?.toLowerCase() || ''}`
   }
 }

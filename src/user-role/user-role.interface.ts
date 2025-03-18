@@ -1,4 +1,4 @@
 export interface RolePermission {
-  email: string
+  username: string
   role: string
 }
