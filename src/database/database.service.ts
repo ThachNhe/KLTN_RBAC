@@ -46,8 +46,7 @@ export class DatabaseService {
 
       await pool.end()
     } catch (error) {
-      console.log('connectToDatabase -> error', error)
-      return 'Could not connect to PostgreSQL'
+      throw new InternalServerErrorException('Could not connect to PostgreSQL')
     }
   }
 
