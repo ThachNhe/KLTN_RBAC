@@ -190,13 +190,18 @@ export class ${policyName} extends PolicyHandlerBase {
       `${moduleName}.controller.ts`,
     )
 
+    const serviceFilePath = path.join(moduleDir, `${moduleName}.service.ts`)
+
     const controllerFileContent = this.generateControllerFileContent(
       moduleName,
       moduleElem,
       projectPath,
     )
+
+    const serviceFileContent = this.generateServiceContent(moduleName)
     await fs.writeFile(controllerFilePath, controllerFileContent, 'utf8')
     await this.createPolicyFile(projectPath, moduleName, moduleElem)
+    await fs.writeFile(serviceFilePath, serviceFileContent, 'utf8')
   }
 
   private generateModuleFileContent(moduleName: string): string {
@@ -223,6 +228,8 @@ export class ${className} {}
     projectPath: string,
   ): string {
     const className = this.capitalizeFirstLetter(moduleName) + 'Controller'
+    const serviceName = this.capitalizeFirstLetter(moduleName) + 'Service'
+    const serviceVarName = moduleName.toLowerCase() + 'Service'
 
     let rules: any[] = []
     if (moduleElem.Controller1 && moduleElem.Controller1[0].Rule) {
@@ -234,7 +241,10 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { PoliciesGuard } from '@/policy/policies.guard';
 import { CheckPolicies } from '@/policy/policy.decorator';
+import { ${serviceName} } from './${moduleName}.service';
 `
+
+    console.log('rules:', rules)
 
     // Import policy files
     let hasPolicyImports = false
@@ -269,7 +279,7 @@ import { CheckPolicies } from '@/policy/policy.decorator';
   @Roles('${role}')
   @UseGuards(RolesGuard)
 ${policyDecorator}  ${methodName}(@Param() params, @Body() body) {
-    return \`${action} /${resource} => only for ${role}\`;
+    return this.${serviceVarName}.${methodName}(params, body);
   }
 `
     }
@@ -277,7 +287,20 @@ ${policyDecorator}  ${methodName}(@Param() params, @Body() body) {
     return `${imports}
 
 @Controller('${moduleName}')
-export class ${className} {${methodsContent}
+export class ${className} {
+  constructor(private readonly ${serviceVarName}: ${serviceName}) {}${methodsContent}
+}
+`
+  }
+
+  private generateServiceContent(moduleName: string) {
+    const className = this.capitalizeFirstLetter(moduleName) + 'Service'
+
+    return `import { Injectable } from '@nestjs/common';
+    
+@Injectable()
+export class ${className} {
+  constructor() {}
 }
 `
   }

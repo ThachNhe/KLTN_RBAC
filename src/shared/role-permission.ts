@@ -93,7 +93,9 @@ export const getServiceContentFromControllerContent = async (
               const elements = node.importClause.namedBindings.elements
 
               for (const element of elements) {
+                // console.log('element:', element)
                 const importName = element.name.text
+                // console.log('importName:', importName)
                 if (importName.includes('Service')) {
                   serviceImports.push({
                     name: importName,
@@ -110,6 +112,8 @@ export const getServiceContentFromControllerContent = async (
     }
 
     findServiceImports(sourceFile)
+
+    console.log('serviceImports:', serviceImports)
 
     if (serviceImports.length === 0) {
       throw new Error('Cannot find any service imports')
