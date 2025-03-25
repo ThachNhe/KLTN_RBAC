@@ -10,7 +10,6 @@ import {
 import { Injectable } from '@nestjs/common'
 import * as path from 'path'
 import * as ts from 'typescript'
-import * as fs from 'fs'
 
 @Injectable()
 export class RolePermissionService {
