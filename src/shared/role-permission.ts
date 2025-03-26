@@ -113,7 +113,7 @@ export const getServiceContentFromControllerContent = async (
 
     findServiceImports(sourceFile)
 
-    console.log('serviceImports:', serviceImports)
+    // console.log('serviceImports:', serviceImports)
 
     if (serviceImports.length === 0) {
       throw new Error('Cannot find any service imports')
