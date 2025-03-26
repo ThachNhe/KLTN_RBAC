@@ -110,9 +110,6 @@ export class RolePermissionService {
       ...this.getDecoratorByName(sourceFile, 'Delete'),
     ]
 
-    let resourceString = ''
-    let resource = []
-
     let serviceMethods = await this.extractServiceMethods(fileContent)
 
     // console.log('Service methods: ', serviceMethods)
@@ -147,20 +144,31 @@ export class RolePermissionService {
         constraintPolicies,
         policyContent[0]?.content || '',
       )
-      conditions = extractConstraints(conditionString)
-      // console.log('ConditionsString:======= ', conditionString)
 
-      // console.log('Conditions:======= ', conditions)
+      // conditionString = await this.llmService.getConstraintHuggingFace(
+      //   controllerOperations,
+      //   constraintPolicies,
+      //   policyContent[0]?.content || '',
+      // )
+
+      const cleanedString = this.formatConstraintString(conditionString)
+      conditions = extractConstraints(cleanedString)
     }
+
+    let resourceString = ''
+    let resource = []
 
     resourceString = await this.llmService.getResourceName(
       serviceMethods,
       serviceContent?.content,
     )
 
-    resource = extractResourceNames(resourceString)
+    // resourceString = await this.llmService.getResourceNameHuggingFace(
+    //   serviceMethods,
+    //   serviceContent?.content,
+    // )
 
-    // console.log('Resource======================: ', resourceString)
+    resource = extractResourceNames(resourceString)
 
     let roles: string[] = []
     if (rolesDecorator.length > 0) {
@@ -243,7 +251,7 @@ export class RolePermissionService {
             role: rule.Role,
             action: rule.Action,
             resource: rule.Resource,
-            condition: rule.Condition?.Restriction || '',
+            condition: rule.Condition?.Restriction?.replace(/ /g, '') || '',
           })
         }
       }
@@ -410,5 +418,9 @@ export class RolePermissionService {
       .filter((op) => result[op].length > 0)
       .map((op) => `${op}: [${result[op].join(', ')}]`)
       .join(', ')
+  }
+
+  private formatConstraintString(constraintString: string) {
+    return constraintString.replace(/['"]/g, '').replace(/ /g, '')
   }
 }
