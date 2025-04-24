@@ -35,14 +35,23 @@ export class UserRoleService {
       const dbCopy = [...rolePermissionsDb]
       const csvCopy = [...rolePermissionsCsv]
 
-      // console.log('dbCopy: ', dbCopy)
       // console.log('csvCopy: ', csvCopy)
 
       this.compareTwoRolePermission(dbCopy, csvCopy)
 
+      const newArray = dbCopy.map((item) => {
+        const { first_name, last_name, ...rest } = item as any
+
+        return {
+          ...rest,
+          firstName: first_name,
+          lastName: last_name,
+        }
+      })
+
       const result = {
         lackingPermissions: csvCopy,
-        redundantPermissions: dbCopy,
+        redundantPermissions: newArray,
       }
 
       return result
@@ -121,7 +130,15 @@ LEFT JOIN users_roles ur ON ur.user_id = u.id
 LEFT JOIN roles r ON r.id = ur.role_id;
       `
       const result = await connection.query(query)
-      return result.rows
+
+      // const normalizedData = result?.rows?.data?.map((item) => ({
+      //   username: item.username || item.user || '',
+      //   role: item.description || item.role || '',
+      //   firstName: item.firstName || item.first_name || '',
+      //   lastName: item.lastName || item.last_name || '',
+      // }))
+
+      return result?.rows
     } catch (error) {
       this.logger.error(`Database error: ${error.message}`, error.stack)
       return []
