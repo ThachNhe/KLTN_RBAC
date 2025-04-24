@@ -39,26 +39,27 @@ export class LlmService {
 
   // OpenAI implementation
   async getResourceName(
-    serviceMethods: any,
+    controllerOperations,
+    serviceMethodPolices,
     serviceFileContent: string,
   ): Promise<string> {
     try {
-      const prompt = `Identify the main Entity directly manipulated in the functions 
-${serviceMethods?.join(', ')} in the code below.
+      const prompt = `Analyze the service methods ${serviceMethodPolices} in the provided code and identify the main data entity each method operates on.
 
-Return the Entity name as a concise list, without any 
-explanations or additional text.
+For each controller operation, determine which database entity (like Account, User, Transaction, etc.) is being directly manipulated in the corresponding service method.
+
+Return ONLY the entity names without any explanations, comments or additional text.
 
 Format the result exactly as follows:
-${serviceMethods.map((action) => `${action}: entityName`).join(',')}
+${controllerOperations.map((action) => `${action}: EntityName`).join(',')}
 
-If no Entity is affected, return an empty string.
+For example, if getAccountDetails method primarily works with Account entities, return "getAccount: Account".
+If a method doesn't clearly operate on any specific entity, use "Unknown".
 
 Source code:
 """
 ${serviceFileContent}
-"""
-      `
+"""`
 
       const response = await firstValueFrom(
         this.httpService

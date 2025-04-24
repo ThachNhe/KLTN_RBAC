@@ -126,14 +126,14 @@ export class RolePermissionService {
     let controllerOperations = await this.getControllerOperations(fileContent)
 
     let constraintPolicies = ''
-    // console.log('Controller operations: ', controllerOperations)
+    console.log('Controller operations: ', controllerOperations)
 
     constraintPolicies = await this.getConstraintPolicies(
       controllerOperations,
       fileContent,
     )
 
-    console.log('Constraint policies: ', constraintPolicies)
+    // console.log('Constraint policies: ', constraintPolicies)
 
     let policyContent = await getPolicyContentFromControllerContent(
       fileContent,
@@ -147,6 +147,7 @@ export class RolePermissionService {
     let conditionString = ''
     let conditions = []
     if (constraintPolicies) {
+      // EX:  getAccount: user.id === resource.account.ownerId,updateAccount: user.account.id === resource.account.id
       conditionString = await this.llmService.getConstraint(
         controllerOperations,
         constraintPolicies,
@@ -167,20 +168,34 @@ export class RolePermissionService {
 
     let resourceString = ''
     let resource = []
+    let serviceMethodPolices = await this.getServiceMethodPolices(
+      controllerOperations,
+      fileContent,
+    )
 
+    // console.log('Service method policies: ', serviceMethodPolices)
+
+    // ex: findTellerTransactions: Transaction,transferFunds: Transaction
     resourceString = await this.llmService.getResourceName(
-      serviceMethods,
+      controllerOperations,
+      serviceMethodPolices,
       serviceContent?.content,
     )
 
-    // console.log('Resource string: ', resourceString)
+    resourceString = this.formatConstraintString(resourceString)
+
+    resource = extractResourceNames(resourceString)
+
+    console.log('Resource string: ', resourceString)
+    console.log('Resource: ', resource)
 
     // resourceString = await this.llmService.getResourceNameHuggingFace(
-    //   serviceMethods,
+    //   controllerOperations,
+    //   serviceMethodPolices,
     //   serviceContent?.content,
     // )
 
-    resource = extractResourceNames(resourceString)
+    // resource = extractResourceNames(resourceString)
 
     let roles: string[] = []
     if (rolesDecorator.length > 0) {
@@ -436,5 +451,76 @@ export class RolePermissionService {
 
   private formatConstraintString(constraintString: string) {
     return constraintString.replace(/['"]/g, '').replace(/ /g, '')
+  }
+
+  private async getServiceMethodPolices(
+    operations: string[],
+    controllerContent: string,
+  ) {
+    // Object to store the results
+    const result: Record<string, string[]> = {}
+
+    // Initialize result with empty arrays for all requested operations
+    operations.forEach((op) => {
+      result[op] = []
+    })
+
+    // Process the controller content for each operation
+    operations.forEach((operation) => {
+      // Find the method definition for this operation
+      const methodRegex = new RegExp(`\\s+${operation}\\s*\\([^{]*{`, 'is')
+      const methodSection = controllerContent.match(methodRegex)
+
+      if (methodSection) {
+        // Find the end of the method block
+        const methodBody = this.extractMethodBody(controllerContent, operation)
+
+        if (methodBody) {
+          // Look for service method calls (this.accountService.methodName)
+          const serviceCallRegex = /this\.\w+Service\.(\w+)\(/g
+          let serviceMatch
+
+          while ((serviceMatch = serviceCallRegex.exec(methodBody)) !== null) {
+            if (serviceMatch[1]) {
+              result[operation].push(serviceMatch[1])
+            }
+          }
+        }
+      }
+    })
+
+    // Format the output as requested: "operation: [method1, method2], ..."
+    return operations
+      .filter((op) => result[op].length > 0)
+      .map((op) => `${op}: [${result[op].join(', ')}]`)
+      .join(', ')
+  }
+
+  // Helper function to extract the full method body
+  private extractMethodBody(
+    content: string,
+    methodName: string,
+  ): string | null {
+    const methodStartRegex = new RegExp(`\\s+${methodName}\\s*\\([^{]*{`, 'i')
+    const startMatch = methodStartRegex.exec(content)
+
+    if (!startMatch || startMatch.index === undefined) return null
+
+    const startPos = startMatch.index + startMatch[0].length
+    let openBraces = 1
+    let endPos = startPos
+
+    // Find the matching closing brace by counting braces
+    for (let i = startPos; i < content.length; i++) {
+      if (content[i] === '{') openBraces++
+      else if (content[i] === '}') openBraces--
+
+      if (openBraces === 0) {
+        endPos = i
+        break
+      }
+    }
+
+    return content.substring(startPos, endPos)
   }
 }
