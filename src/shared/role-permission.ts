@@ -57,15 +57,20 @@ export const extractNestJsProject = async (
 }
 
 export const parseXML = async (xmlFileData: string) => {
-  const parser = new xml2js.Parser({ explicitArray: false })
-  return new Promise((resolve, reject) => {
-    parser.parseString(xmlFileData, (err, result) => {
-      if (err) {
-        reject('Error parsing XML')
-      }
-      resolve(result.Policys.Module)
+  try {
+    const parser = new xml2js.Parser({ explicitArray: false })
+    return new Promise((resolve, reject) => {
+      parser.parseString(xmlFileData, (err, result) => {
+        if (err) {
+          reject('Error parsing XML')
+        }
+        resolve(result.Policys.Module)
+      })
     })
-  })
+  } catch (error) {
+    console.error('Error parsing XML:', error)
+    return null
+  }
 }
 
 export const getServiceContentFromControllerContent = async (
@@ -125,6 +130,8 @@ export const getServiceContentFromControllerContent = async (
     if (!path.extname(servicePath)) {
       servicePath += '.ts'
     }
+
+    console.log('servicePath:', servicePath)
 
     let moduleName = ''
 
@@ -221,6 +228,8 @@ export const getServiceContentFromControllerContent = async (
       )
     }
 
+    // console.log('possiblePaths:=====', possiblePaths)
+
     try {
       const potentialServiceFiles = await findAllServiceFiles(
         path.join(extractPath, 'src'),
@@ -229,6 +238,7 @@ export const getServiceContentFromControllerContent = async (
     } catch (error) {
       console.error('Error when get service file:', error)
     }
+    // console.log('possiblePaths 2:=====', possiblePaths)
 
     const uniquePaths = [...new Set(possiblePaths)]
 
@@ -356,6 +366,8 @@ export const getPolicyContentFromControllerContent = async (
     }
 
     findPolicyImports(sourceFile)
+
+    // console.log('policyImports:', policyImports)
 
     if (policyImports.length === 0) {
       throw new Error('Cannot find any policy imports')

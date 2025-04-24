@@ -39,13 +39,26 @@ export class LlmService {
 
   // OpenAI implementation
   async getResourceName(
-    serviceFunctions: any,
+    serviceMethods: any,
     serviceFileContent: string,
   ): Promise<string> {
     try {
-      const prompt = `Identify the main Entity directly manipulated in the functions ${serviceFunctions?.join(', ')} in the code below. Return the Entity name as a concise list, without any explanations or additional text. Format the result exactly as follows:
-${serviceFunctions.map((action) => `${action}: entityName`).join(',')}
-If no Entity is affected, return an empty string. Source code: """ ${serviceFileContent} """`
+      const prompt = `Identify the main Entity directly manipulated in the functions 
+${serviceMethods?.join(', ')} in the code below.
+
+Return the Entity name as a concise list, without any 
+explanations or additional text.
+
+Format the result exactly as follows:
+${serviceMethods.map((action) => `${action}: entityName`).join(',')}
+
+If no Entity is affected, return an empty string.
+
+Source code:
+"""
+${serviceFileContent}
+"""
+      `
 
       const response = await firstValueFrom(
         this.httpService
@@ -94,9 +107,24 @@ If no Entity is affected, return an empty string. Source code: """ ${serviceFile
     policyFileContent: string,
   ): Promise<string> {
     try {
-      const prompt = `Identify the constraints in the functions and their corresponding policies ${constraintPolicies} in the code below. Return the constraints as a concise list, without any explanations or additional text. The constraint of each policy is the string inside super('this is the constraint I'm looking for'). Format the result exactly as follows:
+      const prompt = `Identify the constraints in the functions and their corresponding 
+policies ${constraintPolicies} in the code below.
+
+Return the constraints as a concise list, without any 
+explanations or additional text.
+
+The constraint of each policy is the string inside 
+super('this is the constraint I'm looking for').
+
+Format the result exactly as follows:
 ${controllerOperations.map((action) => `${action}: constraint`).join(',')}
-If there are no constraints, return an empty string. Source code: """ ${policyFileContent} """`
+
+If there are no constraints, return an empty string.
+
+Source code:
+"""
+${policyFileContent}
+"""`
 
       const response = await firstValueFrom(
         this.httpService

@@ -35,10 +35,12 @@ export class RolePermissionService {
           entry.entryName.endsWith('.controller.ts') &&
           !entry.isDirectory &&
           !entry.entryName.includes('/auth/') &&
+          !entry.entryName.includes('/user/') &&
           !entry.entryName.endsWith('app.controller.ts'),
       )
 
       const controllerFiles = controllerEntries.map((entry) => entry.entryName)
+
       console.log('Controller files: ', controllerFiles)
 
       for (const entry of controllerEntries) {
@@ -122,10 +124,16 @@ export class RolePermissionService {
     )
 
     let controllerOperations = await this.getControllerOperations(fileContent)
-    let constraintPolicies = await this.getConstraintPolicies(
+
+    let constraintPolicies = ''
+    // console.log('Controller operations: ', controllerOperations)
+
+    constraintPolicies = await this.getConstraintPolicies(
       controllerOperations,
       fileContent,
     )
+
+    console.log('Constraint policies: ', constraintPolicies)
 
     let policyContent = await getPolicyContentFromControllerContent(
       fileContent,
@@ -145,6 +153,8 @@ export class RolePermissionService {
         policyContent[0]?.content || '',
       )
 
+      // console.log('Condition string: ', conditionString)
+
       // conditionString = await this.llmService.getConstraintHuggingFace(
       //   controllerOperations,
       //   constraintPolicies,
@@ -162,6 +172,8 @@ export class RolePermissionService {
       serviceMethods,
       serviceContent?.content,
     )
+
+    // console.log('Resource string: ', resourceString)
 
     // resourceString = await this.llmService.getResourceNameHuggingFace(
     //   serviceMethods,
@@ -201,6 +213,8 @@ export class RolePermissionService {
     }
 
     const maxLength = Math.max(actions.length, roles.length)
+
+    console.log('actions: ', actions)
 
     for (let i = 0; i < maxLength; i++) {
       permissions.push({
