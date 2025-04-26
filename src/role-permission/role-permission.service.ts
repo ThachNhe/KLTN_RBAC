@@ -1,8 +1,6 @@
 import { LlmService } from '@/llm/llm.service'
 import {
-  extractConstraints,
   extractNestJsProject,
-  extractResourceNames,
   getPolicyContentFromControllerContent,
   getServiceContentFromControllerContent,
   parseXML,
@@ -50,6 +48,7 @@ export class RolePermissionService {
           fileContent,
           extractPath,
         )
+
         this.buildPermissions(controllerPermissions)
       }
       this.buildRules(modules)
@@ -70,6 +69,7 @@ export class RolePermissionService {
         this.permissions,
         this.rules,
       )
+
       const lackRule = this.filterLackRules(this.permissions, this.rules)
 
       this.rules = []
@@ -90,14 +90,14 @@ export class RolePermissionService {
   }
 
   private async getControllerPermissions(
-    fileContent: string,
+    controllerFileContent: string,
     projectPath: string,
   ) {
     const permissions = []
 
     const sourceFile = ts.createSourceFile(
       'controller.ts',
-      fileContent,
+      controllerFileContent,
       ts.ScriptTarget.Latest,
       true,
       ts.ScriptKind.TS,
@@ -112,120 +112,101 @@ export class RolePermissionService {
       ...this.getDecoratorByName(sourceFile, 'Delete'),
     ]
 
-    let serviceMethods = await this.extractServiceMethods(fileContent)
+    let controllerMethodMappingArr = this.getControllerServiceMapping(
+      controllerFileContent,
+    )
+
+    // console.log('Controller method mapping: ', controllerMethodMappingArr)
+
+    let serviceMethods = await this.extractServiceMethods(controllerFileContent)
 
     // console.log('Service methods: ', serviceMethods)
 
     const extractPath = path.join(__dirname, '../../uploads', 'nestjs-project')
 
     const serviceContent = await getServiceContentFromControllerContent(
-      fileContent,
+      controllerFileContent,
       extractPath,
     )
 
-    let controllerOperations = await this.getControllerOperations(fileContent)
-
-    let constraintPolicies = ''
     // console.log('Controller operations: ', controllerOperations)
 
-    constraintPolicies = await this.getConstraintPolicies(
-      controllerOperations,
-      fileContent,
-    )
+    // constraintPolicies = await this.getConstraintPolicies(
+    //   controllerOperations,
+    //   fileContent,
+    // )
 
-    console.log('Constraint policies: ', constraintPolicies)
-
-    let policyContent = await getPolicyContentFromControllerContent(
-      fileContent,
-      extractPath,
-    )
+    // console.log('Constraint policies: ', constraintPolicies)
 
     // console.log('Controller operations: ', controllerOperations)
     // console.log('Constraint decorators: ', constraintPolicies)
     // console.log('Policy content: ', policyContent)
 
-    let conditionString = ''
-    let conditions = []
-    if (constraintPolicies) {
-      conditionString = await this.llmService.getConstraint(
-        controllerOperations,
-        constraintPolicies,
+    let resources = []
+    let resource = []
+
+    resources = await this.llmService.getResourceName(
+      controllerMethodMappingArr,
+      serviceMethods,
+      serviceContent?.content,
+    )
+
+    const policyMethods = this.extractPolicies(controllerFileContent)
+    const controllerMethodsAndPolicies =
+      this.extractControllerMethodsAndPolicies(controllerFileContent)
+
+    // console.log(
+    //   'Extracted controller methods and policies: ',
+    //   controllerMethodsAndPolicies,
+    // )
+    // console.log('Policy methods: ', policyMethods)
+
+    let policyContent = await getPolicyContentFromControllerContent(
+      controllerFileContent,
+      extractPath,
+    )
+
+    let policies = []
+    if (policyMethods) {
+      policies = await this.llmService.getConstraint(
+        controllerMethodsAndPolicies,
+        policyMethods,
         policyContent[0]?.content || '',
       )
-
       // console.log('Condition string: ', conditionString)
-
       // conditionString = await this.llmService.getConstraintHuggingFace(
       //   controllerOperations,
       //   constraintPolicies,
       //   policyContent[0]?.content || '',
       // )
-
-      const cleanedString = this.formatConstraintString(conditionString)
-      conditions = extractConstraints(cleanedString)
+      // const cleanedString = this.formatConstraintString(conditionString)
+      // conditions = extractConstraints(cleanedString)
     }
 
-    let resourceString = ''
-    let resource = []
+    const roles = this.extractControllerMethodsAndRoles(controllerFileContent)
 
-    resourceString = await this.llmService.getResourceName(
-      serviceMethods,
-      serviceContent?.content,
+    const actions = this.extractControllerMethodsAndHttpMethods(
+      controllerFileContent,
     )
 
-    // console.log('Resource string: ', resourceString)
+    // console.log('policies: ', policies)
 
-    // resourceString = await this.llmService.getResourceNameHuggingFace(
-    //   serviceMethods,
-    //   serviceContent?.content,
-    // )
+    // console.log('resource: ', resources)
 
-    resource = extractResourceNames(resourceString)
+    // console.log('roles: ', roles)
 
-    let roles: string[] = []
-    if (rolesDecorator.length > 0) {
-      roles = rolesDecorator.map((d) => {
-        const roleExpression = d.expression
-        if (
-          ts.isCallExpression(roleExpression) &&
-          roleExpression.arguments.length > 0
-        ) {
-          const arg = roleExpression.arguments[0]
-          if (ts.isStringLiteral(arg)) {
-            return arg.text
-          }
-        }
-        return ''
-      })
-    }
+    // console.log('Actions: ', actions)
 
-    let actions: string[] = []
-    if (actionsDecorators.length > 0) {
-      actions = actionsDecorators.map((d) => {
-        if (
-          ts.isCallExpression(d.expression) &&
-          ts.isIdentifier(d.expression.expression)
-        ) {
-          return d.expression.expression.getText().toLowerCase()
-        }
-        return ''
-      })
-    }
+    const accessRules = this.extractAccessRules(
+      policies,
+      resources,
+      roles,
+      actions,
+    )
 
-    const maxLength = Math.max(actions.length, roles.length)
+    console.log('Access rules: ', accessRules)
 
-    console.log('actions: ', actions)
-
-    for (let i = 0; i < maxLength; i++) {
-      permissions.push({
-        role: roles[i] || '',
-        action: actions[i] || '',
-        resource: resource[i] || '',
-        condition: conditions[i] || '',
-      })
-    }
-
-    return permissions
+    return accessRules || []
   }
 
   private getDecoratorByName(
@@ -279,11 +260,15 @@ export class RolePermissionService {
   }
 
   private equalCompare(rule: any, permission: any): boolean {
+    const normalizeCondition = (condition: string) =>
+      condition.replace(/\s+/g, '')
+
     return (
       rule.role.toLowerCase() === permission.role.toLowerCase() &&
       rule.action.toLowerCase() === permission.action.toLowerCase() &&
       rule.resource.toLowerCase() === permission.resource.toLowerCase() &&
-      rule.condition === permission.condition
+      normalizeCondition(rule.condition) ===
+        normalizeCondition(permission.condition)
     )
   }
 
@@ -357,84 +342,221 @@ export class RolePermissionService {
     return methodNames
   }
 
-  private async getControllerOperations(controllerContent: string) {
-    const sourceFile = ts.createSourceFile(
-      'controller.ts',
-      controllerContent,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
+  // map controller method to service method
+  private getControllerServiceMapping(controllerContent) {
+    const serviceNameMatch = controllerContent.match(
+      /constructor\s*\(\s*private\s+(?:readonly\s+)?(\w+)\s*:\s*\w+Service\s*\)/,
     )
 
-    const methodNames: string[] = []
-
-    function visit(node: ts.Node) {
-      if (
-        ts.isMethodDeclaration(node) &&
-        node.name &&
-        ts.isIdentifier(node.name)
-      ) {
-        methodNames.push(node.name.text)
-      }
-
-      ts.forEachChild(node, visit)
+    if (!serviceNameMatch) {
+      throw new Error('Cannot find service constructor')
     }
+    const serviceName = serviceNameMatch[1]
 
-    visit(sourceFile)
+    const methodBlocks =
+      controllerContent.match(/async\s+\w+\([^{]*\)\s*{[^}]*}/g) || []
+    const results = []
 
-    return methodNames
-  }
+    methodBlocks.forEach((block) => {
+      const controllerMethodMatch = block.match(/async\s+(\w+)/)
+      if (!controllerMethodMatch) return
+      const controllerMethod = controllerMethodMatch[1]
 
-  private async getConstraintPolicies(
-    operations: string[],
-    controllerContent: string,
-  ) {
-    // Object to store the results
-    const result: Record<string, string[]> = {}
+      const serviceMethodMatch = block.match(
+        new RegExp(`this\\.${serviceName}\\.(\\w+)`),
+      )
+      if (!serviceMethodMatch) return
+      const serviceMethod = serviceMethodMatch[1]
 
-    // Initialize result with empty arrays for all requested operations
-    operations.forEach((op) => {
-      result[op] = []
+      results.push({ [controllerMethod]: serviceMethod })
     })
 
-    // Process the controller content for each operation
-    operations.forEach((operation) => {
-      // Find the method definition for this operation
-      const methodRegex = new RegExp(`\\s+${operation}\\s*\\(`, 'i')
-      const methodMatch = controllerContent.match(methodRegex)
+    return results
+  }
 
-      if (methodMatch) {
-        // Find the position of the method
-        const methodPos = methodMatch.index
+  private extractPolicies(sourceCode) {
+    const policyRegex =
+      /@CheckPolicies\s*\(\s*new\s+([A-Za-z0-9_]+Policy)\s*\(\s*\)\s*\)/g
 
-        if (methodPos) {
-          // Look backwards from the method to find the CheckPolicies decorator
-          const sectionStart = Math.max(0, methodPos - 200) // Look back 200 chars at most
-          const methodSection = controllerContent.substring(
-            sectionStart,
-            methodPos,
-          )
+    const policies = []
+    let match
 
-          // Extract policy from CheckPolicies decorator
-          const policyMatch = methodSection.match(
-            /@CheckPolicies\(new\s+(\w+)\(\)\)/,
-          )
+    while ((match = policyRegex.exec(sourceCode)) !== null) {
+      policies.push(match[1])
+    }
 
-          if (policyMatch && policyMatch[1]) {
-            result[operation].push(policyMatch[1])
+    return policies
+  }
+
+  private extractControllerMethodsAndPolicies(sourceCode) {
+    const result = []
+
+    const methodRegex = /async\s+([a-zA-Z0-9_]+)\s*\([^)]*\)/g
+    const policyRegex =
+      /@CheckPolicies\s*\(\s*new\s+([A-Za-z0-9_]+)\s*\(\s*\)\s*\)/g
+
+    const methods = []
+    let methodMatch
+    while ((methodMatch = methodRegex.exec(sourceCode)) !== null) {
+      methods.push({
+        name: methodMatch[1],
+        position: methodMatch.index,
+      })
+    }
+
+    const policies = []
+    let policyMatch
+    while ((policyMatch = policyRegex.exec(sourceCode)) !== null) {
+      policies.push({
+        name: policyMatch[1],
+        position: policyMatch.index,
+      })
+    }
+
+    for (const method of methods) {
+      let closestPolicy = null
+      let minDistance = Infinity
+
+      for (const policy of policies) {
+        if (policy.position < method.position) {
+          const distance = method.position - policy.position
+          if (distance < minDistance) {
+            minDistance = distance
+            closestPolicy = policy
           }
         }
       }
-    })
 
-    // Format the output as requested: "operation: [Policy1, Policy2], ..."
-    return operations
-      .filter((op) => result[op].length > 0)
-      .map((op) => `${op}: [${result[op].join(', ')}]`)
-      .join(', ')
+      if (closestPolicy) {
+        result.push({ [method.name]: closestPolicy.name })
+      }
+    }
+
+    return result
   }
 
-  private formatConstraintString(constraintString: string) {
-    return constraintString.replace(/['"]/g, '').replace(/ /g, '')
+  private extractControllerMethodsAndHttpMethods(sourceCode) {
+    const result = []
+
+    const httpMethodRegex =
+      /@(Get|Post|Put|Delete|Patch|Options|Head)(\([^)]*\))?/g
+    const methodRegex = /async\s+([a-zA-Z0-9_]+)\s*\([^)]*\)/g
+
+    const methods = []
+    let methodMatch
+    while ((methodMatch = methodRegex.exec(sourceCode)) !== null) {
+      methods.push({
+        name: methodMatch[1],
+        position: methodMatch.index,
+      })
+    }
+
+    const httpMethods = []
+    let httpMethodMatch
+    while ((httpMethodMatch = httpMethodRegex.exec(sourceCode)) !== null) {
+      httpMethods.push({
+        method: httpMethodMatch[1].toLowerCase(),
+        position: httpMethodMatch.index,
+      })
+    }
+
+    for (const method of methods) {
+      let closestHttpMethod = null
+      let minDistance = Infinity
+
+      for (const httpMethod of httpMethods) {
+        if (httpMethod.position < method.position) {
+          const distance = method.position - httpMethod.position
+          if (distance < minDistance) {
+            minDistance = distance
+            closestHttpMethod = httpMethod
+          }
+        }
+      }
+
+      if (closestHttpMethod) {
+        result.push({ [method.name]: closestHttpMethod.method })
+      }
+    }
+
+    return result
+  }
+
+  private extractControllerMethodsAndRoles(sourceCode) {
+    const result = []
+
+    const roleRegex = /@Roles\(\s*['"]([A-Z_]+)['"]\s*\)/g
+    const methodRegex = /async\s+([a-zA-Z0-9_]+)\s*\([^)]*\)/g
+
+    const methods = []
+    let methodMatch
+    while ((methodMatch = methodRegex.exec(sourceCode)) !== null) {
+      methods.push({
+        name: methodMatch[1],
+        position: methodMatch.index,
+      })
+    }
+
+    const roles = []
+    let roleMatch
+    while ((roleMatch = roleRegex.exec(sourceCode)) !== null) {
+      roles.push({
+        role: roleMatch[1],
+        position: roleMatch.index,
+      })
+    }
+
+    for (const method of methods) {
+      let closestRole = null
+      let minDistance = Infinity
+
+      for (const role of roles) {
+        if (role.position < method.position) {
+          const distance = method.position - role.position
+          if (distance < minDistance) {
+            minDistance = distance
+            closestRole = role
+          }
+        }
+      }
+
+      if (closestRole) {
+        result.push({ [method.name]: closestRole.role })
+      }
+    }
+
+    return result
+  }
+
+  private extractAccessRules(
+    policies: any,
+    resources: any,
+    roles: any,
+    actions: any,
+  ): any {
+    const result = []
+
+    const keys = new Set<string>()
+    ;[...policies, ...resources, ...roles, ...actions].forEach((item) => {
+      Object.keys(item).forEach((key) => keys.add(key))
+    })
+
+    keys.forEach((key) => {
+      const policyItem = policies.find((item) => key in item)
+      const resourceItem = resources.find((item) => key in item)
+      const roleItem = roles.find((item) => key in item)
+      const actionItem = actions.find((item) => key in item)
+
+      if (policyItem && resourceItem && roleItem && actionItem) {
+        result.push({
+          role: roleItem[key],
+          action: actionItem[key],
+          resource: resourceItem[key],
+          condition: policyItem[key],
+        })
+      }
+    })
+
+    return result
   }
 }

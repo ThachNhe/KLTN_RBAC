@@ -131,7 +131,7 @@ export const getServiceContentFromControllerContent = async (
       servicePath += '.ts'
     }
 
-    console.log('servicePath:', servicePath)
+    // console.log('servicePath:', servicePath)
 
     let moduleName = ''
 

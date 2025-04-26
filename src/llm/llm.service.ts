@@ -39,9 +39,10 @@ export class LlmService {
 
   // OpenAI implementation
   async getResourceName(
+    controllerMapServiceMethodArr: any,
     serviceMethods: any,
     serviceFileContent: string,
-  ): Promise<string> {
+  ) {
     try {
       const prompt = `Identify the main Entity directly manipulated in the functions 
 ${serviceMethods?.join(', ')} in the code below.
@@ -95,36 +96,47 @@ ${serviceFileContent}
           ),
       )
 
-      return response.choices[0].message.content
+      const MethodResourceArray = this.convertLlmStringToArray(
+        response.choices[0].message.content,
+      )
+
+      // console.log('MethodResourceArray: ', MethodResourceArray)
+
+      const controllerMethodResourceArray = this.combineArrays(
+        controllerMapServiceMethodArr,
+        MethodResourceArray,
+      )
+
+      return controllerMethodResourceArray
     } catch (error) {
       throw new Error(`Error from getResourceName: ${error.message}`)
     }
   }
 
   async getConstraint(
-    controllerOperations: any,
-    constraintPolicies: any,
+    controllerMethodMappingArr: any,
+    policyMethods: any,
     policyFileContent: string,
-  ): Promise<string> {
+  ) {
     try {
-      const prompt = `Identify the constraints in the functions and their corresponding 
-policies ${constraintPolicies} in the code below.
+      const prompt = `Identify the constraints in the functions ${policyMethods} in the code below.
 
 Return the constraints as a concise list, without any 
 explanations or additional text.
 
-The constraint of each policy is the string inside 
+The constraint of each function is the string inside 
 super('this is the constraint I'm looking for').
 
 Format the result exactly as follows:
-${controllerOperations.map((action) => `${action}: constraint`).join(',')}
+${policyMethods.map((policy) => `${policy}: constraint`).join(',')}
 
 If there are no constraints, return an empty string.
 
 Source code:
 """
 ${policyFileContent}
-"""`
+"""
+`
 
       const response = await firstValueFrom(
         this.httpService
@@ -161,7 +173,24 @@ ${policyFileContent}
           ),
       )
 
-      return response?.choices[0]?.message?.content
+      const MethodPolicyArray = this.convertLlmStringToArray(
+        response.choices[0].message.content,
+      )
+
+      // console.log('controllerMethodMappingArr: ', controllerMethodMappingArr)
+      // console.log('MethodPolicyArray: ', MethodPolicyArray)
+
+      const controllerMethodPolicyArray = this.combineArrays(
+        controllerMethodMappingArr,
+        MethodPolicyArray,
+      )
+
+      // console.log('controllerMethodPolicyArray: ', controllerMethodPolicyArray)
+
+      // return controllerMethodResourceArray
+
+      // return response?.choices[0]?.message?.content
+      return controllerMethodPolicyArray
     } catch (error) {
       throw new Error(`Error from getConstraint: ${error.message}`)
     }
@@ -277,5 +306,43 @@ If there are no constraints, return an empty string. Source code: """ ${policyFi
     } catch (error) {
       throw new Error(`Error from getConstraintHuggingFace: ${error.message}`)
     }
+  }
+
+  private convertLlmStringToArray(input: string) {
+    const pairs = input.split(',')
+
+    const resultObject = {}
+
+    pairs.forEach((pair) => {
+      const [key, value] = pair.split(':').map((item) => item.trim())
+
+      resultObject[key] = value
+    })
+
+    return [resultObject]
+  }
+
+  private combineArrays(
+    arr1: Array<Record<string, string>>,
+    arr2: Array<Record<string, string>>,
+  ): Array<Record<string, string>> {
+    const result: Record<string, string>[] = []
+
+    // Duyệt qua mảng thứ nhất
+    for (const obj1 of arr1) {
+      const key = Object.keys(obj1)[0] // Lấy key của object (ví dụ: 'getAccount')
+      const value = obj1[key] // Lấy giá trị tương ứng (ví dụ: 'getAccountDetails')
+
+      // Duyệt qua mảng thứ hai để tìm giá trị tương ứng
+      for (const obj2 of arr2) {
+        if (value in obj2) {
+          // Nếu tìm thấy, thêm vào kết quả một object mới
+          result.push({ [key]: obj2[value] })
+          break
+        }
+      }
+    }
+
+    return result
   }
 }
