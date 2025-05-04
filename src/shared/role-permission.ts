@@ -131,102 +131,7 @@ export const getServiceContentFromControllerContent = async (
       servicePath += '.ts'
     }
 
-    // console.log('servicePath:', servicePath)
-
-    let moduleName = ''
-
-    const controllerMatch = fileContent.match(
-      /@Controller\(\s*['"]([^'"]+)['"]\s*\)/,
-    )
-
-    if (controllerMatch && controllerMatch[1]) {
-      const controllerPath = controllerMatch[1]
-      const parts = controllerPath.split('/')
-      if (parts.length > 0) {
-        moduleName = parts[0]
-      }
-    }
-
-    if (!moduleName) {
-      const moduleMatch = fileContent.match(/@Module\(\s*\{/)
-
-      if (moduleMatch) {
-        const controllersMatch = fileContent.match(
-          /controllers\s*:\s*\[([\s\S]*?)\]/,
-        )
-
-        if (controllersMatch) {
-          const controllersList = controllersMatch[1]
-          const controllerNameMatch = controllersList.match(/(\w+)Controller/)
-          if (controllerNameMatch && controllerNameMatch[1]) {
-            moduleName = controllerNameMatch[1].toLowerCase()
-          }
-        }
-      }
-    }
-
     const possiblePaths = []
-
-    if (servicePath.startsWith('./')) {
-      const relativePath = servicePath.substring(2)
-      if (moduleName) {
-        possiblePaths.push(
-          path.join(extractPath, 'src', moduleName, relativePath),
-        )
-      }
-
-      possiblePaths.push(path.join(extractPath, 'src', relativePath))
-    } else if (servicePath.startsWith('../')) {
-      const relativePath = servicePath.substring(3)
-      possiblePaths.push(path.join(extractPath, 'src', relativePath))
-    } else {
-      possiblePaths.push(path.join(extractPath, 'src', servicePath))
-      possiblePaths.push(path.join(extractPath, servicePath))
-    }
-
-    if (moduleName) {
-      possiblePaths.push(path.join(extractPath, 'src', moduleName, servicePath))
-
-      possiblePaths.push(
-        path.join(
-          extractPath,
-          'src',
-          moduleName,
-          'services',
-          path.basename(servicePath),
-        ),
-      )
-
-      const serviceFileName = `${moduleName}.service.ts`
-      possiblePaths.push(
-        path.join(extractPath, 'src', moduleName, serviceFileName),
-      )
-      possiblePaths.push(
-        path.join(extractPath, 'src', moduleName, 'services', serviceFileName),
-      )
-    }
-
-    const serviceFileName = path.basename(servicePath)
-    possiblePaths.push(
-      path.join(extractPath, 'src', 'services', serviceFileName),
-    )
-
-    const suggestedServiceName = firstServiceImport.name
-      .replace(/Service$/, '')
-      .toLowerCase()
-    possiblePaths.push(
-      path.join(extractPath, 'src', `${suggestedServiceName}.service.ts`),
-    )
-    if (moduleName) {
-      possiblePaths.push(
-        path.join(
-          extractPath,
-          'src',
-          moduleName,
-          `${suggestedServiceName}.service.ts`,
-        ),
-      )
-    }
 
     // console.log('possiblePaths:=====', possiblePaths)
 
@@ -238,7 +143,8 @@ export const getServiceContentFromControllerContent = async (
     } catch (error) {
       console.error('Error when get service file:', error)
     }
-    // console.log('possiblePaths 2:=====', possiblePaths)
+
+    console.log('5.2 possiblePaths:', possiblePaths)
 
     const uniquePaths = [...new Set(possiblePaths)]
 
@@ -391,92 +297,7 @@ export const getPolicyContentFromControllerContent = async (
         policyPath += '.ts'
       }
 
-      let moduleName = ''
-
-      const controllerMatch = fileContent.match(
-        /@Controller\(\s*['"]([^'"]+)['"]\s*\)/,
-      )
-
-      if (controllerMatch && controllerMatch[1]) {
-        const controllerPath = controllerMatch[1]
-        const parts = controllerPath.split('/')
-        if (parts.length > 0) {
-          moduleName = parts[0]
-        }
-      }
-
       const possiblePaths = []
-
-      if (policyPath.startsWith('./')) {
-        const relativePath = policyPath.substring(2)
-        if (moduleName) {
-          possiblePaths.push(
-            path.join(extractPath, 'src', moduleName, relativePath),
-          )
-        }
-
-        possiblePaths.push(path.join(extractPath, 'src', relativePath))
-      } else if (policyPath.startsWith('../')) {
-        const relativePath = policyPath.substring(3)
-        possiblePaths.push(path.join(extractPath, 'src', relativePath))
-      } else if (policyPath.startsWith('@/')) {
-        // Handle absolute imports with @ alias
-        const relativePath = policyPath.substring(2)
-        possiblePaths.push(path.join(extractPath, 'src', relativePath))
-      } else {
-        possiblePaths.push(path.join(extractPath, 'src', policyPath))
-        possiblePaths.push(path.join(extractPath, policyPath))
-      }
-
-      if (moduleName) {
-        possiblePaths.push(
-          path.join(extractPath, 'src', moduleName, policyPath),
-        )
-
-        possiblePaths.push(
-          path.join(
-            extractPath,
-            'src',
-            moduleName,
-            'policies',
-            path.basename(policyPath),
-          ),
-        )
-      }
-
-      // Add general paths
-      const policyFileName = path.basename(policyPath)
-      possiblePaths.push(
-        path.join(extractPath, 'src', 'policies', policyFileName),
-      )
-
-      // Try to guess more policy paths based on module name
-      if (moduleName) {
-        possiblePaths.push(
-          path.join(extractPath, 'src', moduleName, 'policy', policyFileName),
-        )
-        possiblePaths.push(
-          path.join(extractPath, 'src', moduleName, 'policies', policyFileName),
-        )
-        possiblePaths.push(
-          path.join(
-            extractPath,
-            'src',
-            moduleName,
-            'policy',
-            `${moduleName}.policy.ts`,
-          ),
-        )
-        possiblePaths.push(
-          path.join(
-            extractPath,
-            'src',
-            moduleName,
-            'policies',
-            `${moduleName}.policy.ts`,
-          ),
-        )
-      }
 
       try {
         const potentialPolicyFiles = await findAllPolicyFiles(

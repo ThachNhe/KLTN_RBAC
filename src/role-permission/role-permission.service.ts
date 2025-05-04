@@ -7,7 +7,6 @@ import {
 } from '@/shared/role-permission'
 import { Injectable } from '@nestjs/common'
 import * as path from 'path'
-import * as ts from 'typescript'
 
 @Injectable()
 export class RolePermissionService {
@@ -93,25 +92,6 @@ export class RolePermissionService {
     controllerFileContent: string,
     projectPath: string,
   ) {
-    const permissions = []
-
-    const sourceFile = ts.createSourceFile(
-      'controller.ts',
-      controllerFileContent,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    )
-
-    const rolesDecorator = this.getDecoratorByName(sourceFile, 'Roles')
-
-    const actionsDecorators = [
-      ...this.getDecoratorByName(sourceFile, 'Get'),
-      ...this.getDecoratorByName(sourceFile, 'Post'),
-      ...this.getDecoratorByName(sourceFile, 'Put'),
-      ...this.getDecoratorByName(sourceFile, 'Delete'),
-    ]
-
     let controllerMethodMappingArr = this.getControllerServiceMapping(
       controllerFileContent,
     )
@@ -129,27 +109,25 @@ export class RolePermissionService {
       extractPath,
     )
 
-    // console.log('Controller operations: ', controllerOperations)
-
-    // constraintPolicies = await this.getConstraintPolicies(
-    //   controllerOperations,
-    //   fileContent,
-    // )
-
-    // console.log('Constraint policies: ', constraintPolicies)
-
-    // console.log('Controller operations: ', controllerOperations)
-    // console.log('Constraint decorators: ', constraintPolicies)
-    // console.log('Policy content: ', policyContent)
-
     let resources = []
-    let resource = []
 
     resources = await this.llmService.getResourceName(
       controllerMethodMappingArr,
       serviceMethods,
       serviceContent?.content,
     )
+
+    // resources = await this.llmService.getResourceNameHuggingFace(
+    //   controllerMethodMappingArr,
+    //   serviceMethods,
+    //   serviceContent?.content,
+    // )
+
+    // resources = await this.llmService.getResourceNameOllama(
+    //   controllerMethodMappingArr,
+    //   serviceMethods,
+    //   serviceContent?.content,
+    // )
 
     const policyMethods = this.extractPolicies(controllerFileContent)
     const controllerMethodsAndPolicies =
@@ -173,14 +151,16 @@ export class RolePermissionService {
         policyMethods,
         policyContent[0]?.content || '',
       )
-      // console.log('Condition string: ', conditionString)
-      // conditionString = await this.llmService.getConstraintHuggingFace(
-      //   controllerOperations,
-      //   constraintPolicies,
+      // policies = await this.llmService.getConstraintHuggingFace(
+      //   controllerMethodsAndPolicies,
+      //   policyMethods,
       //   policyContent[0]?.content || '',
       // )
-      // const cleanedString = this.formatConstraintString(conditionString)
-      // conditions = extractConstraints(cleanedString)
+      // policies = await this.llmService.getConstraintOllama(
+      //   controllerMethodsAndPolicies,
+      //   policyMethods,
+      //   policyContent[0]?.content || '',
+      // )
     }
 
     const roles = this.extractControllerMethodsAndRoles(controllerFileContent)
@@ -204,27 +184,9 @@ export class RolePermissionService {
       actions,
     )
 
-    console.log('Access rules: ', accessRules)
+    // console.log('Access rules: ', accessRules)
 
     return accessRules || []
-  }
-
-  private getDecoratorByName(
-    sourceFile: ts.SourceFile,
-    decoratorName: string,
-  ): ts.Decorator[] {
-    const decorators: ts.Decorator[] = []
-    const visitNode = (node: ts.Node) => {
-      if (ts.isDecorator(node) && ts.isCallExpression(node.expression)) {
-        if (node.expression.expression.getText() === decoratorName) {
-          decorators.push(node)
-        }
-      }
-      ts.forEachChild(node, visitNode)
-    }
-
-    visitNode(sourceFile)
-    return decorators
   }
 
   private buildRules(modules: any) {
