@@ -144,28 +144,9 @@ export const getServiceContentFromControllerContent = async (
       console.error('Error when get service file:', error)
     }
 
-    console.log('5.2 possiblePaths:', possiblePaths)
+    // console.log('5.2 possiblePaths:', possiblePaths)
 
     const uniquePaths = [...new Set(possiblePaths)]
-
-    for (const possiblePath of uniquePaths) {
-      try {
-        if (fs.existsSync(possiblePath)) {
-          const serviceContent = fs.readFileSync(possiblePath, 'utf8')
-
-          if (serviceContent.includes(`class ${firstServiceImport.name}`)) {
-            return {
-              success: true,
-              path: possiblePath,
-              content: serviceContent,
-              name: firstServiceImport.name,
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`Error when get service content ${possiblePath}:`, error)
-      }
-    }
 
     for (const possiblePath of uniquePaths) {
       try {
@@ -230,6 +211,87 @@ export const findAllServiceFiles = async (dir) => {
   return serviceFiles
 }
 
+export const extractServiceContent = (
+  serviceContent: string,
+  methodsToExtract: string[],
+) => {
+  try {
+    const sourceFile = ts.createSourceFile(
+      'service.ts',
+      serviceContent,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    )
+
+    const extractedMethodsArray = []
+
+    function findMethods(node) {
+      if (ts.isMethodDeclaration(node) && node.name) {
+        const methodName = node.name.getText(sourceFile)
+
+        // Chỉ trích xuất các phương thức được yêu cầu
+        if (methodsToExtract.includes(methodName)) {
+          const start = node.getStart(sourceFile)
+          const end = node.getEnd()
+          const methodText = serviceContent.substring(start, end)
+
+          // Tìm JSDoc comment
+          let jsDocComment = ''
+          const leadingComments = ts.getLeadingCommentRanges(
+            serviceContent,
+            node.getFullStart(),
+          )
+          if (leadingComments && leadingComments.length > 0) {
+            const jsDocStart = leadingComments[0].pos
+            const jsDocEnd = leadingComments[leadingComments.length - 1].end
+            jsDocComment = serviceContent.substring(jsDocStart, jsDocEnd)
+          }
+
+          // Thêm JSDoc và nội dung phương thức vào mảng
+          if (jsDocComment) {
+            extractedMethodsArray.push(jsDocComment)
+          }
+          extractedMethodsArray.push(methodText)
+        }
+      }
+
+      ts.forEachChild(node, findMethods)
+    }
+
+    findMethods(sourceFile)
+
+    // Kiểm tra xem đã tìm được tất cả các phương thức yêu cầu chưa
+    const foundMethods = []
+    const methodRegex = /async\s+(\w+)\s*\(/g
+    let match
+
+    for (const content of extractedMethodsArray) {
+      while ((match = methodRegex.exec(content)) !== null) {
+        foundMethods.push(match[1])
+      }
+    }
+
+    const notFoundMethods = methodsToExtract.filter(
+      (method) => !foundMethods.includes(method),
+    )
+
+    // Tạo nội dung file mới chỉ chứa các phương thức đã trích xuất
+    const newFileContent = extractedMethodsArray.join('\n\n')
+
+    return {
+      success: true,
+      content: newFileContent,
+      notFound: notFoundMethods.length > 0 ? notFoundMethods : undefined,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: `Error when extracting methods: ${error.message}`,
+    }
+  }
+}
+
 export const getPolicyContentFromControllerContent = async (
   fileContent: string,
   extractPath: string,
@@ -245,6 +307,7 @@ export const getPolicyContentFromControllerContent = async (
 
     const policyImports = []
 
+    // Get all policy imports
     function findPolicyImports(node) {
       if (ts.isImportDeclaration(node)) {
         if (ts.isStringLiteral(node.moduleSpecifier)) {
@@ -288,9 +351,12 @@ export const getPolicyContentFromControllerContent = async (
       importsByPath[policyImport.path].push(policyImport.name)
     }
 
+    console.log('importsByPath:', importsByPath)
+
     let results = []
 
     for (const importPath in importsByPath) {
+      console.log('importPath:', importPath)
       const policyNames = importsByPath[importPath]
       let policyPath = importPath
       if (!path.extname(policyPath)) {
@@ -309,6 +375,8 @@ export const getPolicyContentFromControllerContent = async (
       }
 
       const uniquePaths = [...new Set(possiblePaths)]
+
+      console.log('policyNames:', policyNames)
 
       // First try to find exact class matches
       let foundPolicy = false
@@ -340,46 +408,7 @@ export const getPolicyContentFromControllerContent = async (
         }
       }
 
-      // If we haven't found the policy yet, try case-insensitive class name match
       if (!foundPolicy) {
-        for (const possiblePath of uniquePaths) {
-          try {
-            if (fs.existsSync(possiblePath)) {
-              const policyContent = fs.readFileSync(possiblePath, 'utf8')
-
-              let anyPolicyFound = false
-              for (const policyName of policyNames) {
-                const classRegex = new RegExp(`class\\s+${policyName}\\b`, 'i')
-                if (classRegex.test(policyContent)) {
-                  anyPolicyFound = true
-                  break
-                }
-              }
-
-              if (anyPolicyFound) {
-                results.push({
-                  path: possiblePath,
-                  content: policyContent,
-                })
-                foundPolicy = true
-                break
-              }
-            }
-          } catch (error) {
-            console.error(
-              `Error when get policy content ${possiblePath}:`,
-              error,
-            )
-          }
-        }
-      }
-
-      if (!foundPolicy) {
-        // results.push({
-        //   error: `Cannot find policy content for ${policyNames.join(', ')}`,
-        //   importPath: importPath,
-        //   checkedPaths: uniquePaths,
-        // })
         results = []
       }
     }
@@ -390,7 +419,7 @@ export const getPolicyContentFromControllerContent = async (
     } else {
       return {
         success: false,
-        errors: results.map((r) => r.error),
+        errors: "Policy files don't exist",
         policies: results,
       }
     }
@@ -399,8 +428,10 @@ export const getPolicyContentFromControllerContent = async (
   }
 }
 
-export const findAllPolicyFiles = async (dir) => {
+export const findAllPolicyFiles = async (srcDirPath) => {
   const policyFiles = []
+
+  console.log('dir:', srcDirPath)
 
   async function scanDir(currentDir) {
     try {
@@ -411,10 +442,7 @@ export const findAllPolicyFiles = async (dir) => {
 
         if (entry.isDirectory()) {
           await scanDir(fullPath)
-        } else if (
-          entry.name.endsWith('.policy.ts') ||
-          (entry.name.includes('policy') && entry.name.endsWith('.ts'))
-        ) {
+        } else if (entry.name.endsWith('.policy.ts')) {
           policyFiles.push(fullPath)
         }
       }
@@ -423,84 +451,6 @@ export const findAllPolicyFiles = async (dir) => {
     }
   }
 
-  await scanDir(dir)
+  await scanDir(srcDirPath)
   return policyFiles
-}
-
-// Helper function to extract policy constraints
-export const extractPolicyConstraints = (policyContent, policyNames) => {
-  const constraints = {}
-
-  for (const policyName of policyNames) {
-    const regex = new RegExp(
-      `export\\s+class\\s+${policyName}[\\s\\S]*?constructor\\s*\\(\\)\\s*{[\\s\\S]*?super\\s*\\(\\s*['"]([^'"]*)['"](\\s*\\)|[^;]*)`,
-      'i',
-    )
-
-    const match = regex.exec(policyContent)
-    if (match && match[1]) {
-      constraints[policyName] = match[1]
-    } else {
-      constraints[policyName] = null
-    }
-  }
-
-  return constraints
-}
-
-// Extract operations and their policy usage from controller
-export const extractPolicyUsageFromController = (controllerContent) => {
-  const operations = []
-
-  // Find controller base path
-  const controllerMatch = controllerContent.match(
-    /@Controller\(\s*['"]([^'"]+)['"]\s*\)/,
-  )
-  const controllerBasePath = controllerMatch ? controllerMatch[1] : ''
-
-  // Find methods with policy decorators
-  const methodRegex =
-    /@(Get|Post|Put|Delete|Patch)\s*\(\s*['"]?([^'"]*?)['"]?\s*\)[^]*?@CheckPolicies\s*\(\s*new\s+(\w+)\s*\(\s*\)\s*\)[^]*?(\w+)\s*\(/g
-  let match
-
-  while ((match = methodRegex.exec(controllerContent)) !== null) {
-    const httpMethod = match[1].toUpperCase()
-    const endpoint = match[2] || controllerBasePath
-    const policyName = match[3]
-    const methodName = match[4]
-
-    operations.push({
-      method: httpMethod,
-      endpoint,
-      methodName,
-      policyName,
-    })
-  }
-
-  return operations
-}
-
-// Extract operations from resource name string
-export const extractResourceNames = (resourceNameString: string) => {
-  const pairs = resourceNameString.split(',')
-
-  const entities = pairs
-    .map((pair) => {
-      const match = pair.trim().match(/:\s*(\w+)/)
-      return match && match[1] ? match[1] : null
-    })
-    .filter((entity) => entity !== null)
-
-  return entities
-}
-
-// Extract constraints from a string
-export const extractConstraints = (constraintString: string) => {
-  if (!constraintString || typeof constraintString !== 'string') {
-    return []
-  }
-
-  const regex = /:\s*([^,]+)/g
-  const matches = [...constraintString.matchAll(regex)]
-  return matches.map((match) => match[1].trim())
 }

@@ -21,15 +21,16 @@ export class LlmService {
     // Initialize the OpenAI API key and base URL
     this.baseUrl = this.configService.get('OPEN_AI_URL')
     this.openAIKey = this.configService.get('OPEN_AI_KEY')
-    this.model = this.configService.get<string>('OPEN_AI_MODEL_4o')
+    this.model = this.configService.get<string>('OPEN_AI_MODEL_4_1_MINI')
 
     // Initialize the HUGGING API key and base URL
     this.huggingFaceBaseUrl = this.configService.get('HUGGING_FACE_URL')
-    // Khôi phục cách lấy key từ config thay vì hardcode
-    this.huggingFaceKey = this.configService.get('HUGGING_FACE_KEY2')
-    // this.huggingFaceKey = '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'
+    this.huggingFaceKey = this.configService.get('HUGGING_FACE_KEY')
 
-    this.huggingFaceModel = this.configService.get('HUGGINGFACE_MODEL3')
+    // Hugging Face model
+    this.huggingFaceModel = this.configService.get(
+      'HUGGINGFACE_MISTRALAI_MISTRAL_INSTRUC_V3',
+    )
 
     if (!this.openAIKey) {
       throw new Error('OPEN_AI_KEY is not set')
@@ -47,22 +48,30 @@ export class LlmService {
     serviceFileContent: string,
   ) {
     try {
-      const prompt = `Identify the main Entity directly manipulated in the functions 
-${serviceMethods?.join(', ')} in the code below.
+      const prompt = `
+      Extract the SINGLE most important entity being directly
+      manipulated in each of these functions from the provided:
+      ${serviceMethods?.join('\n')}
 
-Return the Entity name as a concise list, without any 
-explanations or additional text.
+      Instructions:
+      1. For each function, identify exactly ONE entity name that is
+       the primary data object being manipulated.
+      2. If multiple entities exist, choose only the most dominant one
+       that is central to the function's purpose.
+      3. Focus on the data model/object that is most essential to the
+      core operation.
 
-Format the result exactly as follows:
-${serviceMethods.map((action) => `${action}: entityName`).join(',')}
+      Format your response exactly as follows:
+      ${serviceMethods.map((action) => `${action}: entityName`).join(',')}
 
-If no Entity is affected, return an empty string.
+      The response should contain ONLY the entity names in the
+      specified format - no introduction, explanation, or additional
+      text.
 
-Source code:
-"""
-${serviceFileContent}
-"""
-      `
+      Source code:
+      """
+      ${serviceFileContent}
+      """`
 
       const response = await firstValueFrom(
         this.httpService
@@ -206,26 +215,31 @@ ${policyFileContent}
     serviceFileContent: string,
   ) {
     try {
-      const prompt = `<s>[INST] Identify the single main Entity directly manipulated in each of the functions 
-${serviceMethods?.join(', ')} in the code below.
+      const prompt = `
+      <s>[INST] 
+      Extract the SINGLE most important entity being directly
+      manipulated in each of these functions from the provided:
+      ${serviceMethods?.join('\n')}
 
-IMPORTANT: For each method, assign EXACTLY ONE entity name, even if multiple entities are manipulated.
-Choose the most primary/dominant entity for each method.
+      Instructions:
+      1. For each function, identify exactly ONE entity name that is
+       the primary data object being manipulated.
+      2. If multiple entities exist, choose only the most dominant one
+       that is central to the function's purpose.
+      3. Focus on the data model/object that is most essential to the
+      core operation.
 
-Return ONLY the entity names in this EXACT format with NO additional text, explanation or whitespace:
-${serviceMethods.map((action) => `${action}: entityName`).join(',')}
+      Format your response exactly as follows:
+      ${serviceMethods.map((action) => `${action}: entityName`).join(',')}
 
-Example output format:
-method1: Entity1,method2: Entity2
+      The response should contain ONLY the entity names in the
+      specified format - no introduction, explanation, or additional
+      text.
 
-No additional text, no introduction, no explanation. Just the direct answer in the format above.
-If no Entity is affected by a method, use "-" as the entity name.
-
-Source code:
-"""
-${serviceFileContent}
-"""
-[/INST]</s>`
+      Source code:
+      """
+      ${serviceFileContent}
+      """[/INST]</s>`
 
       const response = await firstValueFrom(
         this.httpService
@@ -380,175 +394,6 @@ ${policyFileContent}
     } catch (error) {
       console.error('Error details:', error)
       throw new Error(`Error from getConstraintHuggingFace: ${error.message}`)
-    }
-  }
-
-  async getResourceNameOllama(
-    controllerMapServiceMethodArr: any,
-    serviceMethods: any,
-    serviceFileContent: string,
-  ) {
-    try {
-      const requestId = Date.now().toString()
-
-      const prompt = `Identify the main Entity directly manipulated in the functions 
-${serviceMethods?.join(', ')} in the code below.
-
-Return the Entity name as a concise list, without any 
-explanations or additional text.
-
-Format the result exactly as follows:
-${serviceMethods.map((action) => `${action}: entityName`).join(',')}
-
-If no Entity is affected, return an empty string.
-
-Source code:
-"""
-${serviceFileContent}
-"""`
-
-      try {
-        await firstValueFrom(
-          this.httpService
-            .post(
-              'http://localhost:11434/api/generate',
-              {
-                model: 'mistral',
-                prompt: `This is a new conversation with ID ${requestId}. Forget all previous context.`,
-                stream: false,
-                options: {
-                  num_predict: 1,
-                },
-              },
-              {
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-Request-ID': requestId,
-                },
-              },
-            )
-            .pipe(catchError(() => [])),
-        )
-      } catch (e) {
-        console.error('Error in firstValueFrom:', e)
-      }
-
-      const response = await firstValueFrom(
-        this.httpService
-          .post(
-            'http://localhost:11434/api/generate',
-            {
-              model: 'mistral',
-              prompt: prompt,
-              stream: false,
-              options: {
-                temperature: 0.1,
-                num_predict: 50,
-                seed: Date.now(),
-                repeat_penalty: 1.2,
-              },
-            },
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Request-ID': requestId,
-                'Cache-Control': 'no-cache',
-              },
-              timeout: 15000,
-            },
-          )
-          .pipe(
-            map((response) => response.data),
-            catchError((error) => {
-              console.error(`Lỗi trong request ${requestId}:`, error.message)
-              throw error
-            }),
-          ),
-      )
-
-      let generatedText = ''
-      if (response && response.response) {
-        generatedText = response.response.trim()
-      }
-
-      console.log(`Generated text (${requestId}):`, generatedText)
-
-      const cleanedModelOutput = this.filterLlmOutput(generatedText)
-      console.log('Cleaned model output:', cleanedModelOutput)
-
-      if (!cleanedModelOutput) {
-        throw new Error('No entity found in the response')
-      }
-    } catch (error) {
-      console.error('Error details:', error)
-      throw new Error(`Error from getResourceNameOllama: ${error.message}`)
-    }
-  }
-
-  async getConstraintOllama(
-    controllerMethodMappingArr: any,
-    policyMethods: any,
-    policyFileContent: string,
-  ) {
-    try {
-      const prompt = `Identify the constraints in the functions ${policyMethods.join(', ')} in the code below.
-
-Return ONLY the constraints as a JSON object without any explanations or additional text.
-Each function constraint is the string inside super('...').
-
-Example of expected response format:
-{
-  "PolicyName1": "constraint1",
-  "PolicyName2": "constraint2"
-}
-
-Source code:
-${policyFileContent}`
-
-      console.log('Sending request to Ollama with Mistral model...')
-
-      const response = await firstValueFrom(
-        this.httpService
-          .post(
-            'http://localhost:11434/api/generate',
-            {
-              model: 'mistral',
-              prompt: prompt,
-              stream: false,
-              options: {
-                num_ctx: 2048,
-                num_predict: 100,
-              },
-            },
-            {
-              headers: {
-                'Content-Type': 'application/json',
-              },
-            },
-          )
-          .pipe(
-            map((response) => response.data),
-            catchError((error) => {
-              console.error('API Error:', error.message)
-              throw error
-            }),
-          ),
-      )
-
-      const generatedText = response.response || ''
-      console.log('Generated text:', generatedText)
-
-      const MethodPolicyArray = this.convertLlmStringToArray(generatedText)
-
-      const controllerMethodPolicyArray = this.combineArrays(
-        controllerMethodMappingArr,
-        MethodPolicyArray,
-      )
-
-      return controllerMethodPolicyArray
-    } catch (error) {
-      console.error('Error in getConstraintOllama:', error)
-      throw new Error(`Failed to get constraints from Ollama: ${error.message}`)
     }
   }
 

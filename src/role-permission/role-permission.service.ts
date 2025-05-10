@@ -1,6 +1,7 @@
 import { LlmService } from '@/llm/llm.service'
 import {
   extractNestJsProject,
+  extractServiceContent,
   getPolicyContentFromControllerContent,
   getServiceContentFromControllerContent,
   parseXML,
@@ -50,6 +51,7 @@ export class RolePermissionService {
 
         this.buildPermissions(controllerPermissions)
       }
+
       this.buildRules(modules)
 
       console.log(
@@ -92,6 +94,7 @@ export class RolePermissionService {
     controllerFileContent: string,
     projectPath: string,
   ) {
+    //
     let controllerMethodMappingArr = this.getControllerServiceMapping(
       controllerFileContent,
     )
@@ -104,40 +107,43 @@ export class RolePermissionService {
 
     const extractPath = path.join(__dirname, '../../uploads', 'nestjs-project')
 
-    const serviceContent = await getServiceContentFromControllerContent(
+    const fullServiceContent = await getServiceContentFromControllerContent(
       controllerFileContent,
       extractPath,
     )
 
+    // const extractedServiceContent = extractServiceContent(
+    //   fullServiceContent?.content,
+    //   serviceMethods as string[],
+    // )
+    // console.log('Extracted service content:==== ', extractedServiceContent)
+
     let resources = []
+
+    // console.log('controllerMethodMappingArr : ', controllerMethodMappingArr)
+
+    console.log('Resources: ', resources)
+
+    // Solution 2 to get resource name
+
+    // console.log('Resources++++++++++++: ', resources)
 
     resources = await this.llmService.getResourceName(
       controllerMethodMappingArr,
       serviceMethods,
-      serviceContent?.content,
+      fullServiceContent?.content,
     )
 
     // resources = await this.llmService.getResourceNameHuggingFace(
     //   controllerMethodMappingArr,
     //   serviceMethods,
-    //   serviceContent?.content,
-    // )
-
-    // resources = await this.llmService.getResourceNameOllama(
-    //   controllerMethodMappingArr,
-    //   serviceMethods,
-    //   serviceContent?.content,
+    //   fullServiceContent?.content,
     // )
 
     const policyMethods = this.extractPolicies(controllerFileContent)
+
     const controllerMethodsAndPolicies =
       this.extractControllerMethodsAndPolicies(controllerFileContent)
-
-    // console.log(
-    //   'Extracted controller methods and policies: ',
-    //   controllerMethodsAndPolicies,
-    // )
-    // console.log('Policy methods: ', policyMethods)
 
     let policyContent = await getPolicyContentFromControllerContent(
       controllerFileContent,
@@ -152,11 +158,6 @@ export class RolePermissionService {
         policyContent[0]?.content || '',
       )
       // policies = await this.llmService.getConstraintHuggingFace(
-      //   controllerMethodsAndPolicies,
-      //   policyMethods,
-      //   policyContent[0]?.content || '',
-      // )
-      // policies = await this.llmService.getConstraintOllama(
       //   controllerMethodsAndPolicies,
       //   policyMethods,
       //   policyContent[0]?.content || '',
