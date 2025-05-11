@@ -18,24 +18,26 @@ export class UserRoleService {
     try {
       const connectionKey = await this.databaseService.getConnectionKey()
       const pool = this.databaseService.getPool(connectionKey)
+
       if (!(await this.databaseService.testConnection(pool))) {
         throw new InternalServerErrorException('Connect Db first!!!')
       }
 
-      const [rolePermissionsDb, rolePermissionsCsv] = await Promise.all([
+      const [userRoleDbData, userRoleCsvData] = await Promise.all([
         this.retrieveDBData(),
         this.retrieveDataFromCSVFile(file),
       ])
 
-      if (!rolePermissionsDb?.length || !rolePermissionsCsv?.length) {
+      if (!userRoleDbData?.length || !userRoleCsvData?.length) {
         this.logger.warn('Empty data from DB or CSV')
         throw new InternalServerErrorException('Empty data from DB or CSV')
       }
 
-      const dbCopy = [...rolePermissionsDb]
-      const csvCopy = [...rolePermissionsCsv]
+      const dbCopy = [...userRoleDbData]
+      const csvCopy = [...userRoleCsvData]
 
       // console.log('csvCopy: ', csvCopy)
+      // console.log('dbCopy: ', dbCopy)
 
       this.compareTwoRolePermission(dbCopy, csvCopy)
 

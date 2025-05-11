@@ -6,8 +6,8 @@ import { catchError, firstValueFrom, map } from 'rxjs'
 @Injectable()
 export class LlmService {
   private readonly openAIKey: string
-  private readonly baseUrl: string
-  private readonly model: string
+  private readonly openAIUrl: string
+  private readonly openAIModel: string
 
   // Hugging Face properties
   private readonly huggingFaceKey: string
@@ -19,9 +19,9 @@ export class LlmService {
     private configService: ConfigService,
   ) {
     // Initialize the OpenAI API key and base URL
-    this.baseUrl = this.configService.get('OPEN_AI_URL')
+    this.openAIUrl = this.configService.get('OPEN_AI_URL')
     this.openAIKey = this.configService.get('OPEN_AI_KEY')
-    this.model = this.configService.get<string>('OPEN_AI_MODEL_4_1_MINI')
+    this.openAIModel = this.configService.get<string>('OPEN_AI_MODEL_4_1_MINI')
 
     // Initialize the HUGGING API key and base URL
     this.huggingFaceBaseUrl = this.configService.get('HUGGING_FACE_URL')
@@ -76,9 +76,9 @@ export class LlmService {
       const response = await firstValueFrom(
         this.httpService
           .post(
-            `${this.baseUrl}`,
+            `${this.openAIUrl}`,
             {
-              model: this.model,
+              model: this.openAIModel,
               messages: [
                 {
                   role: 'user',
@@ -153,9 +153,9 @@ ${policyFileContent}
       const response = await firstValueFrom(
         this.httpService
           .post(
-            `${this.baseUrl}`,
+            `${this.openAIUrl}`,
             {
-              model: this.model,
+              model: this.openAIModel,
               messages: [
                 {
                   role: 'user',
@@ -189,19 +189,10 @@ ${policyFileContent}
         response.choices[0].message.content,
       )
 
-      // console.log('controllerMethodMappingArr: ', controllerMethodMappingArr)
-      // console.log('MethodPolicyArray: ', MethodPolicyArray)
-
       const controllerMethodPolicyArray = this.combineArrays(
         controllerMethodMappingArr,
         MethodPolicyArray,
       )
-
-      // console.log('controllerMethodPolicyArray: ', controllerMethodPolicyArray)
-
-      // return controllerMethodResourceArray
-
-      // return response?.choices[0]?.message?.content
       return controllerMethodPolicyArray
     } catch (error) {
       throw new Error(`Error from getConstraint: ${error.message}`)
@@ -417,16 +408,14 @@ ${policyFileContent}
   ): Array<Record<string, string>> {
     const result: Record<string, string>[] = []
 
-    // Duyệt qua mảng thứ nhất
     for (const obj1 of arr1) {
-      const key = Object.keys(obj1)[0] // Lấy key của object (ví dụ: 'getAccount')
-      const value = obj1[key] // Lấy giá trị tương ứng (ví dụ: 'getAccountDetails')
+      const controllerMethod = Object.keys(obj1)[0] // (ex: 'getAccount')
+      const serviceMethod = obj1[controllerMethod] // (ex: 'getAccountDetails')
 
-      // Duyệt qua mảng thứ hai để tìm giá trị tương ứng
+      // Iterate through the second array to find the matching key
       for (const obj2 of arr2) {
-        if (value in obj2) {
-          // Nếu tìm thấy, thêm vào kết quả một object mới
-          result.push({ [key]: obj2[value] })
+        if (serviceMethod in obj2) {
+          result.push({ [controllerMethod]: obj2[serviceMethod] })
           break
         }
       }
@@ -438,20 +427,19 @@ ${policyFileContent}
   private filterLlmOutput(llmOutput: string): string {
     if (!llmOutput) return ''
 
-    // Bước 1: Tìm các pattern phù hợp với "method: entity"
+    // find suitable pattern "method: entity"
     const methodEntityPattern = /(\w+):\s*(\w+)/g
     const matches = [...llmOutput.matchAll(methodEntityPattern)]
 
     if (matches.length === 0) return ''
 
-    // Bước 2: Xây dựng chuỗi kết quả theo định dạng yêu cầu
+    // Built a new array of strings with the format "method: entity"
     const filteredPairs = matches.map((match) => {
       const method = match[1].trim()
       const entity = match[2].trim()
       return `${method}: ${entity}`
     })
 
-    // Bước 3: Kết hợp tất cả các cặp với dấu phẩy
     return filteredPairs.join(',')
   }
 }
