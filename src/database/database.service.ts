@@ -97,7 +97,7 @@ export class DatabaseService {
   // testConnection method
   public async testConnection(pool: Pool) {
     try {
-      await pool.query('SELECT * FROM users u')
+      await pool.query('SELECT 1')
       return true
     } catch {
       return false

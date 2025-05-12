@@ -28,6 +28,8 @@ export const extractNestJsProject = async (
           entry.entryName !== 'src/auth',
       )
 
+      console.log('extractPath Entries:', entries)
+
       // Only extract src entries
       for (const entry of srcEntries) {
         if (entry.isDirectory) {
@@ -39,10 +41,10 @@ export const extractNestJsProject = async (
           const fileData = entry.getData()
           const targetPath = path.join(extractPath, entry.entryName)
 
-          const parentDir = path.dirname(targetPath)
-          if (!fs.existsSync(parentDir)) {
-            fs.mkdirSync(parentDir, { recursive: true })
-          }
+          // const parentDir = path.dirname(targetPath)
+          // if (!fs.existsSync(parentDir)) {
+          //   fs.mkdirSync(parentDir, { recursive: true })
+          // }
 
           fs.writeFileSync(targetPath, fileData)
         }
@@ -125,11 +127,6 @@ export const getServiceContentFromControllerContent = async (
     }
 
     const firstServiceImport = serviceImports[0]
-
-    let servicePath = firstServiceImport.path
-    if (!path.extname(servicePath)) {
-      servicePath += '.ts'
-    }
 
     const possiblePaths = []
 
@@ -351,17 +348,13 @@ export const getPolicyContentFromControllerContent = async (
       importsByPath[policyImport.path].push(policyImport.name)
     }
 
-    console.log('importsByPath:', importsByPath)
+    // console.log('importsByPath:', importsByPath)
 
     let results = []
 
     for (const importPath in importsByPath) {
-      console.log('importPath:', importPath)
+      // console.log('importPath:', importPath)
       const policyNames = importsByPath[importPath]
-      let policyPath = importPath
-      if (!path.extname(policyPath)) {
-        policyPath += '.ts'
-      }
 
       const possiblePaths = []
 
@@ -376,7 +369,7 @@ export const getPolicyContentFromControllerContent = async (
 
       const uniquePaths = [...new Set(possiblePaths)]
 
-      console.log('policyNames:', policyNames)
+      // console.log('policyNames:', policyNames)
 
       // First try to find exact class matches
       let foundPolicy = false

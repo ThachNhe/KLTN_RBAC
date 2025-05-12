@@ -16,7 +16,10 @@ export class RolePermissionService {
 
   constructor(private readonly llmService: LlmService) {}
 
-  async checkProjectPermissions(xmlFileData: string, nestJsZipBuffer: Buffer) {
+  async checkRolePermissionViolation(
+    xmlFileData: string,
+    nestJsZipBuffer: Buffer,
+  ) {
     const AdmZip = require('adm-zip')
     const zip = new AdmZip(nestJsZipBuffer)
     const entries = zip.getEntries()
@@ -36,6 +39,8 @@ export class RolePermissionService {
           !entry.entryName.includes('/user/') &&
           !entry.entryName.endsWith('app.controller.ts'),
       )
+
+      // console.log('controllerEntries: ', controllerEntries)
 
       const controllerFiles = controllerEntries.map((entry) => entry.entryName)
 
@@ -122,7 +127,7 @@ export class RolePermissionService {
 
     // console.log('controllerMethodMappingArr : ', controllerMethodMappingArr)
 
-    console.log('Resources: ', resources)
+    // console.log('Resources: ', resources)
 
     // Solution 2 to get resource name
 
@@ -318,6 +323,7 @@ export class RolePermissionService {
 
     const methodBlocks =
       controllerContent.match(/async\s+\w+\([^{]*\)\s*{[^}]*}/g) || []
+
     const results = []
 
     methodBlocks.forEach((block) => {

@@ -156,8 +156,9 @@ export class defaultPolicy extends PolicyHandlerBase {
     for (const rule of rules) {
       if (rule.Condition && rule.Condition[0].Restriction) {
         const restriction = rule.Condition[0].Restriction[0]
-        const methodName = rule.Name?.[0] ?? 'defaultMethodName'
-        const policyName = this.capitalizeFirstLetter(methodName) + 'Policy'
+        const policyName = rule.Condition[0].Name?.[0] ?? 'policyName'
+        // console.log('rule======', rule)
+        // console.log('policyName======', policyName)
 
         policyContent += `@Injectable()
 export class ${policyName} extends PolicyHandlerBase {

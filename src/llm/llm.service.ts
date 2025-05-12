@@ -21,7 +21,10 @@ export class LlmService {
     // Initialize the OpenAI API key and base URL
     this.openAIUrl = this.configService.get('OPEN_AI_URL')
     this.openAIKey = this.configService.get('OPEN_AI_KEY')
-    this.openAIModel = this.configService.get<string>('OPEN_AI_MODEL_4_1_MINI')
+    // this.openAIModel = this.configService.get<string>('OPEN_AI_MODEL_4_1')
+    // this.openAIModel = this.configService.get<string>('OPEN_AI_MODEL_4_1_MINI')
+    // this.openAIModel = this.configService.get<string>('OPEN_AI_MODEL_4o')
+    this.openAIModel = this.configService.get<string>('OPEN_AI_MODEL_4o_MINI')
 
     // Initialize the HUGGING API key and base URL
     this.huggingFaceBaseUrl = this.configService.get('HUGGING_FACE_URL')

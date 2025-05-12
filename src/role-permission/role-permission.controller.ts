@@ -35,7 +35,7 @@ export class RolePermissionController {
 
     const nestJsZipData = files.projectFile[0].buffer
 
-    return this.rolePermissionService.checkProjectPermissions(
+    return this.rolePermissionService.checkRolePermissionViolation(
       xmlFileData,
       nestJsZipData,
     )
